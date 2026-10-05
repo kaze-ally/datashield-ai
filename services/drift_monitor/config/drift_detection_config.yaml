@@ -1,0 +1,55 @@
+# Week 3: Drift Detection Configuration
+# Lives inside services/drift_monitor/ — this is the drift service's own
+# config, analogous to how sidecar_validator has its own YAML contracts
+# under contracts/examples/. Baked into the image at build time; override
+# the mount path with DRIFT_CONFIG_PATH if you'd rather bind-mount it.
+
+monitor_name: "orders_pipeline_drift"
+description: "Continuous drift monitoring for the validated e-commerce orders stream"
+
+source:
+  table: "validated_orders"        # rename to match your actual Postgres sink table
+  timestamp_column: "ingested_at"  # rename to match your actual timestamp column
+
+reference_window:
+  strategy: "rolling"               # "rolling" | "fixed"
+  lookback_days: 14
+  offset_days: 7
+  fixed_start: null
+  fixed_end: null
+
+current_window:
+  lookback_hours: 1
+
+columns:
+  numerical:
+    - order_total
+    - item_count
+    - shipping_cost
+    - discount_pct
+  categorical:
+    - payment_method
+    - shipping_country
+    - product_category
+  # Keep this list in sync with contracts/examples/orders_v1.yaml's schema —
+  # the drift monitor should watch the same fields the sidecar validates.
+
+drift_detection:
+  method: "psi"                        # psi | ks | wasserstein | jensenshannon
+  column_drift_threshold: 0.1
+  categorical_significance_level: 0.05
+  dataset_drift_share_threshold: 0.25  # a real two-column shift crosses this with seven monitored columns
+  min_reference_rows: 200
+  min_current_rows: 30
+
+outputs:
+  postgres_table: "drift_reports"
+  html_report_dir: "/app/reports/drift"   # mount a shared volume here + into the dashboard service
+  kafka_drift_topic: "drift-events"        # new dedicated topic — see kafka/topics.append.sh
+
+alerting:
+  # One continuing drift episode = one drift-events message (edge-triggered), re-announced
+  # at most every renotify_minutes while it persists. Every check is still persisted.
+  # For demos/tests use POST /check?force_publish=true to bypass the gate.
+  renotify_minutes: 30
+  min_publish_interval_seconds: 120

@@ -1,0 +1,13 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+evidently>=0.7,<0.8
+scipy>=1.11
+pandas>=2.0
+psycopg2-binary>=2.9
+# Tested against kafka-python 3.0.11 specifically (its async rewrite has
+# different internal timeout config keys than the classic 2.x line — see
+# bootstrap_timeout_ms in kafka_publisher.py). If your other services pin
+# an older kafka-python 2.x, check that KafkaProducer kwarg still applies.
+kafka-python>=2.0
+pyyaml>=6.0
+pydantic>=2.5

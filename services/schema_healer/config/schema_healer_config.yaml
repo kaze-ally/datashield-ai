@@ -1,0 +1,38 @@
+# services/schema_healer/config/schema_healer_config.yaml
+#
+# Same pattern as drift_detection_config.yaml / circuit_breaker_config.yaml /
+# rca_copilot_config.yaml — tunable without a rebuild, mounted read-only.
+
+kafka:
+  source_topic: schema-evolution-requests
+  consumer_group: schema-healer
+  validated_topic: validated-data    # same sink ml-isolation-forest reads from
+  dlq_topic: dead-letter-queue       # matches sidecar_validator's DLQ_TOPIC_DEFAULT
+
+contracts:
+  dir: /app/contracts                # same mount pattern as sidecar_validator
+
+healing:
+  min_confidence: 0.6                # below this, DLQ regardless of severity
+  # Mirrors rca_copilot's two-layer fail-safe: confidence AND post-heal
+  # re-validation must both pass — see healer/pipeline.py.
+  strict_extra_fields: false         # an unrecognized field alone does NOT fail
+                                      # validation by default (see validator.py's
+                                      # docstring, added after full-stack testing
+                                      # showed this was raising the bar on the LLM
+                                      # unnecessarily for the most common, benign
+                                      # kind of schema drift). Set true to require
+                                      # every unexpected field be explicitly dropped.
+
+circuit_guard:
+  failure_threshold: 3               # consecutive healing failures before pausing a contract
+  base_cooldown_seconds: 120
+  backoff_multiplier: 2.0
+  max_cooldown_seconds: 3600
+
+llm:
+  base_url: http://ollama:11434      # NOT an env var, same pattern as rca_copilot_config.yaml —
+                                      # edit here to match your actual Ollama service name/port
+  model: phi4-mini
+  fallback_model: llama3.1:8b
+  timeout_seconds: 60

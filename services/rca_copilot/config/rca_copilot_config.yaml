@@ -1,0 +1,42 @@
+# services/rca_copilot/config/rca_copilot_config.yaml
+#
+# Week 4 part 2 — RCA Copilot (Paper 6: "Automatic Root Cause Analysis via
+# Large Language Models for Cloud Incidents," Chen et al., Microsoft, 2023).
+# The paper's own scope is diagnosis, not autonomous destructive action:
+# RCACopilot "aggregates the critical runtime diagnostic information,
+# predicts the incident's root cause category, and provides an explanatory
+# narrative" — it does not claim to auto-fix the underlying incident. This
+# service follows that scope deliberately: it diagnoses and narrates, and
+# uses severity/confidence only to decide whether the circuit breaker can
+# safely reset (a bounded, reversible control decision), never to trigger
+# an open-ended "fix" action against the pipeline.
+
+source:
+  topic: remediation-requests
+  monitor_name_field: monitor_name
+  report_id_field: report_id
+
+context:
+  drift_reports_table: drift_reports        # Week 3 table — fetched by report_id for diagnostic context
+  circuit_breaker_url: "http://circuit_breaker:8000"  # for /events/{monitor_name} history + /report-outcome
+
+llm:
+  # Direct Ollama call for now — swap base_url to your llm_gateway once its
+  # exact request/response contract is confirmed, to reuse its semantic
+  # caching + cascade rather than bypassing it. See README_week4_part2.md.
+  base_url: "http://ollama:11434"
+  model: "phi4-mini"
+  timeout_seconds: 60
+  fallback_model: "llama3.1:8b"   # used if the primary model call fails or times out
+
+outcome_policy:
+  # Bounded, auditable decision — not an open-ended LLM judgment call:
+  # severity is one of a fixed enum the schema forces the model into, and
+  # only "low"/"medium" are allowed to report success back to the breaker.
+  # "high" always reports failure, keeping the breaker cautious regardless
+  # of how confident the model sounds.
+  auto_reset_severities: ["low", "medium"]
+  min_confidence_to_trust_severity: 0.5   # below this, treat as "high" (fail-safe default)
+
+outputs:
+  postgres_table: rca_reports

@@ -1,0 +1,12 @@
+airflow/logs/*
+.runtime/
+.env
+__pycache__/
+*.pyc
+.DS_Store
+.pytest_cache/
+.airflow_*.txt
+.kafka_*.txt
+.validation_*.log
+.validation_*.txt
+.validation_*.json

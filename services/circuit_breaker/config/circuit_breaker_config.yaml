@@ -1,0 +1,37 @@
+# services/circuit_breaker/config/circuit_breaker_config.yaml
+#
+# Week 4 — Remediation Circuit Breaker (Paper 7: "Safety-Gated Autoscaling" —
+# arXiv 2607.26503, whose pipeline pairs a circuit breaker with automatic
+# rollback and a dry-run mode for human-in-the-loop approval; the classic
+# CLOSED/OPEN/HALF_OPEN pattern here follows Nygard/Fowler and Netflix
+# Hystrix). Gates automated remediation attempts triggered by drift-events
+# (and, later, anomaly events from the Isolation Forest) so a broken healer
+# can't retry forever and mask the underlying bug.
+
+sources:
+  # Each source topic is treated as an independent "incident" feed. A
+  # separate breaker state is tracked per monitor_name, not globally, so one
+  # noisy monitor doesn't trip the breaker for every other pipeline.
+  - topic: drift-events
+    monitor_name_field: monitor_name
+    report_id_field: report_id
+  - topic: anomaly-alerts
+    monitor_name_field: monitor_name
+    report_id_field: report_id
+
+breaker:
+  failure_threshold: 3            # consecutive incidents before tripping OPEN (matches Paper 7's "three times" framing)
+  cooldown_seconds: 300            # OPEN -> HALF_OPEN base wait, before backoff/jitter
+  cooldown_backoff_multiplier: 2.0 # each repeated trip doubles the cooldown base (capped below)
+  cooldown_max_seconds: 3600        # caps exponential growth of the base — see cooldown_jitter_seconds below
+  cooldown_jitter_seconds: 30      # extra randomization on top, for decorrelation across monitors. Uses
+                                    # equal jitter (floor = half the computed backoff), not full jitter — a
+                                    # draw near zero right after tripping would defeat the cooldown's purpose.
+                                    # Actual wait can be up to cooldown_max_seconds + cooldown_jitter_seconds.
+  dry_run: false                   # Paper 7's human-in-the-loop mode: log the decision, don't act on it
+
+outputs:
+  remediation_requests_topic: remediation-requests   # CLOSED/HALF_OPEN incidents forward here — RCA Copilot (Week 4 part 2) will consume this
+  remediation_dlq_topic: remediation-dlq             # OPEN-state incidents (blocked) land here + get logged as an alert
+  postgres_state_table: circuit_breaker_state
+  postgres_events_table: circuit_breaker_events

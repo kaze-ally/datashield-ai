@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DataShield AI — Pipeline Observatory</title>
+<style>
+:root{
+  --bg:#0a0e16; --panel:#111827; --panel2:#151f33; --border:#25314a;
+  --text:#e7edf7; --muted:#8c9ab3;
+  --cyan:#22d3ee; --green:#34d399; --amber:#fbbf24; --purple:#a78bfa; --blue:#60a5fa; --red:#f87171;
+  --mono: ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5}
+header.top{position:sticky;top:0;z-index:5;padding:14px 20px calc(14px + env(safe-area-inset-top,0px));
+  background:rgba(10,14,22,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.15rem}
+.brand .mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--cyan),var(--purple));
+  display:flex;align-items:center;justify-content:center;font-size:16px}
+.brand small{display:block;font-weight:400;color:var(--muted);font-size:.72rem;margin-top:1px}
+.pill{font-size:.75rem;padding:5px 11px;border-radius:999px;border:1px solid var(--border);
+  background:var(--panel);color:var(--muted);display:flex;align-items:center;gap:6px}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+main{max-width:1180px;margin:0 auto;padding:26px 18px 60px}
+h1.hero{font-size:clamp(1.4rem,3vw,2rem);margin:6px 0 6px}
+p.sub{color:var(--muted);margin:0 0 26px;max-width:640px;font-size:.95rem}
+.flow-wrap{overflow-x:auto;padding-bottom:10px;margin-bottom:34px}
+.flow{display:flex;gap:6px;align-items:center;min-width:max-content;padding:4px 2px}
+.node{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;
+  font-size:.78rem;font-family:var(--mono);white-space:nowrap;color:var(--text);cursor:pointer;transition:border-color .15s}
+.node:hover{border-color:var(--cyan)}
+.arrow{color:var(--muted);font-size:1rem;flex:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;
+  display:flex;flex-direction:column;gap:10px}
+.card .head{display:flex;align-items:center;gap:10px}
+.icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-size:17px;flex:none}
+.card h3{margin:0;font-size:1rem}
+.tag{font-size:.65rem;text-transform:uppercase;letter-spacing:.04em;font-weight:600;padding:2px 8px;
+  border-radius:999px;display:inline-block;margin-top:3px}
+.desc{color:var(--muted);font-size:.85rem;margin:0}
+.paper{font-size:.72rem;color:var(--muted);font-style:italic}
+button.toggle{margin-top:4px;background:transparent;border:1px solid var(--border);color:var(--text);
+  padding:7px 11px;border-radius:8px;font-size:.78rem;cursor:pointer;text-align:left;font-family:var(--sans)}
+button.toggle:hover{border-color:var(--cyan);color:var(--cyan)}
+.output{display:none;background:#060a10;border:1px solid var(--border);border-radius:9px;padding:11px 13px;
+  overflow-x:auto}
+.output.show{display:block}
+.output pre{margin:0;font-family:var(--mono);font-size:.74rem;color:#b8f5d0;white-space:pre;line-height:1.55}
+.output .note{color:var(--amber);font-size:.72rem;margin-top:8px;display:block;font-family:var(--sans)}
+.status-line{font-size:.72rem;color:var(--muted);font-family:var(--mono);margin-top:2px}
+footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);
+  font-size:.78rem;display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between}
+@media (max-width:520px){ main{padding:20px 14px 50px} }
+
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:12px 14px;margin-bottom:18px;font-size:.82rem}
+.bar input{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:7px 10px;
+  border-radius:8px;font-family:var(--mono);font-size:.78rem;width:180px}
+.btn{background:var(--cyan);color:#04222b;border:none;padding:7px 14px;border-radius:8px;font-weight:600;
+  font-size:.78rem;cursor:pointer}
+.btn.stop{background:var(--red)}
+.bar .note{color:var(--muted);font-size:.72rem;flex-basis:100%;line-height:1.5}
+.live-summary{font-family:var(--mono);color:var(--muted);font-size:.76rem}
+
+.trace{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:30px}
+.trace h2{margin:0 0 4px;font-size:1.05rem}
+.trace p.sub2{color:var(--muted);font-size:.83rem;margin:0 0 14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:7px 13px;
+  border-radius:999px;font-size:.78rem;cursor:pointer}
+.chip.active{border-color:var(--cyan);color:var(--cyan)}
+.trace-log{display:flex;flex-direction:column;gap:10px;max-height:420px;overflow-y:auto}
+.step{border-left:3px solid var(--border);background:#060a10;border-radius:8px;padding:10px 13px;
+  opacity:0;transform:translateY(4px);animation:stepin .35s ease forwards}
+@keyframes stepin{to{opacity:1;transform:none}}
+.step .sh{font-family:var(--mono);font-size:.78rem;font-weight:600;margin-bottom:5px}
+.step pre{margin:0;font-family:var(--mono);font-size:.73rem;color:#b8f5d0;white-space:pre-wrap;line-height:1.5}
+.card.flash{outline:2px solid var(--cyan);outline-offset:2px;transition:outline-color .6s}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">🛡️ DataShield AI
+    <small>Pipeline Observatory</small>
+  </div>
+  <div class="pill"><span class="dot"></span>Live status not checked</div>
+</header>
+
+<main>
+  <h1 class="hero">How the pipeline actually works</h1>
+  <p class="sub">Click any stage below to see what it does. Stream-backed cards replace their waiting state with the latest real Kafka payload; breaker and RCA cards poll their live APIs. Data flows left to right through Kafka topics; the two LLM stages (Schema Healer, RCA Copilot) run self-hosted via Ollama at $0 inference cost.</p>
+
+  <div class="bar" id="liveBar">
+    <strong style="color:var(--cyan)">⚡ Live poll</strong>
+    <input id="baseUrl" value="http://localhost" spellcheck="false">
+    <button class="btn" id="pollBtn" type="button">Start</button>
+    <span class="live-summary" id="liveSummary">not polling</span>
+    <span class="note">Starts automatically when this page is opened locally (add <code>?manual</code> to the URL to disable). Status is read through the bridge at the WebSocket URL below (<code>/services</code>), so it works from <code>file://</code> without CORS; if the bridge is down it falls back to calling each service directly. The hosted https link cannot reach your machine.</span>
+  </div>
+
+  <div class="flow-wrap">
+    <div class="flow" id="flow"></div>
+  </div>
+
+  <div class="trace">
+    <h2>Trace a record through the pipeline</h2>
+    <p class="sub2">Pick a sample scenario to replay its illustrative record changes. These traces are not live runs.</p>
+    <div class="chips" id="chips"></div>
+    <div class="trace-log" id="traceLog"><div class="step"><div class="sh" style="color:var(--muted)">— pick a scenario above —</div></div></div>
+  </div>
+
+  <div class="trace" id="liveStreamPanel">
+    <h2>Live event stream <span style="color:var(--muted);font-weight:400;font-size:.75rem">— real Kafka activity from your running stack</span></h2>
+    <p class="sub2">Needs <code>python frontend/datashield_bridge.py</code> running on the host. It replays recent history from each topic on start (tagged <em>history</em>), then streams every new Kafka message live. Counts below are for this page session.</p>
+    <div class="bar" style="margin-bottom:14px">
+      <input id="wsUrl" value="ws://localhost:8099/ws" spellcheck="false" style="width:220px">
+      <button class="btn" id="wsBtn" type="button">Connect</button>
+      <button class="btn" id="restBtn" type="button" style="background:var(--purple)">REST fallback</button>
+      <button class="btn" id="clearBtn" type="button" style="background:var(--panel2);color:var(--text);border:1px solid var(--border)">Clear</button>
+      <span class="live-summary" id="wsStatus">disconnected</span>
+      <span class="note">Same local-origin rule as the poll bar above: connect from a locally-opened copy of this page, not the hosted claude.ai link. If your network/proxy blocks WebSockets, use "REST fallback" instead — it polls the bridge's <code>/events/recent</code> endpoint over plain HTTP every 4s.</span>
+    </div>
+    <div class="live-summary" id="topicCounts" style="margin-bottom:10px">no events yet</div>
+    <div class="trace-log" id="eventFeed"><div class="step"><div class="sh" data-placeholder style="color:var(--muted)">— connecting to the bridge… (start python frontend/datashield_bridge.py) —</div></div></div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    <span>9 research papers → 9 production services</span>
+    <span>9 service endpoints checked during live polling</span>
+    <span id="footLive">Live results update while connected to the local stack</span>
+  </footer>
+</main>
+
+<script>
+const services = [
+  {
+    id:'kafka', icon:'📥', color:'#60a5fa', cat:'Ingest',
+    title:'Kafka — raw-data',
+    paper:'Streaming backbone', desc:'IoT/API and DB-CDC producers write JSON payloads to the raw-data topic. Everything downstream reacts to this stream.',
+    output:`topic: raw-data
+producer: order-events-simulator
+sample record:
+{
+  "order_id": "test-order-001",
+  "order_amt": "89.99",
+  "payment_method": "credit_card"
+}`,
+    status:'status not checked'
+  },
+  {
+    id:'sidecar', icon:'📜', color:'#34d399', cat:'Governance',
+    title:'Sidecar Contract Validator',
+    paper:'Paper 9 — Declarative Data Contracts', desc:'Enforces YAML data contracts against raw-data as a lightweight sidecar, decoupled from the main DAGs. Valid records pass through; mismatches are published as schema-evolution-requests.',
+    output:`GET /contracts
+{
+  "name": "orders_v1",
+  "version": 1,
+  "source_topic": "raw-data",
+  "sink_topic": "validated-data",
+  "dlq_topic": "dead-letter-queue"
+}`,
+    status:'status not checked'
+  },
+  {
+    id:'schema', icon:'🩹', color:'#a78bfa', cat:'Healing · LLM',
+    title:'Schema Healer',
+    paper:'Paper 8 — LLM Schema Evolution', desc:'On a schema_mismatch event, proposes a fix from a closed op vocabulary (rename_field, cast_type, set_default…) — never raw code — then re-validates before publishing.',
+    output:'Waiting for a live schema-evolution-requests or healed validated-data event.',
+    status:'status not checked'
+  },
+  {
+    id:'isoforest', icon:'🌲', color:'#22d3ee', cat:'Detection',
+    title:'Isolation Forest',
+    paper:'Papers 1 & 3 — Unsupervised Anomaly Detection', desc:'Runs unsupervised inference on every validated-data record in a streaming window, flagging multi-dimensional outliers standard rule checks miss.',
+    output:'Waiting for a live anomaly-alerts event.',
+    status:'status not checked'
+  },
+  {
+    id:'drift', icon:'📉', color:'#22d3ee', cat:'Detection',
+    title:'Drift Monitor',
+    paper:'Papers 2 & 4 — Unsupervised Drift Detection', desc:'Compares a rolling reference window against current traffic (PSI + chi², cross-checked with Evidently) — no ground-truth labels required.',
+    output:'Waiting for a live drift-events payload.',
+    status:'status not checked'
+  },
+  {
+    id:'breaker', icon:'🔌', color:'#fbbf24', cat:'Safety',
+    title:'Remediation Circuit Breaker',
+    paper:'Paper 7 — Safety-Gated Autoscaling', desc:'CLOSED / OPEN / HALF_OPEN state machine with equal-jitter backoff. Trips after 3 consecutive incidents so a broken auto-heal loop can never mask the underlying bug.',
+    output:'Waiting for the live circuit-breaker state API.',
+    status:'status not checked'
+  },
+  {
+    id:'rca', icon:'🕵️', color:'#a78bfa', cat:'Diagnosis · LLM',
+    title:'RCA Copilot',
+    paper:'Paper 6 — LLM Root Cause Analysis', desc:'Consumes remediation-requests, aggregates drift/Airflow/Kafka context, and calls a self-hosted LLM to produce a narrative + severity/confidence that decides whether the breaker can safely reset.',
+    output:'Waiting for the latest live RCA report.',
+    status:'status not checked'
+  },
+  {
+    id:'gateway', icon:'🧮', color:'#94a3b8', cat:'Infra',
+    title:'LLM Gateway',
+    paper:'Cost optimization layer', desc:'FrugalGPT-style semantic cache + cheap→strong model cascade shared by every LLM-calling service, backed entirely by self-hosted Ollama.',
+    output:`GET /health
+{
+  "cheap_model": "phi4-mini",
+  "strong_model": "llama3.1:8b",
+  "semantic_cache_threshold": 0.94,
+  "inference_cost_per_token": "$0.00"
+}`,
+    status:'status not checked'
+  },
+  {
+    id:'catalog', icon:'📚', color:'#34d399', cat:'Governance',
+    title:'AI Catalog',
+    paper:'Lineage-driven catalog', desc:'Listens to openlineage-events and schema-events, then asks the LLM Gateway to auto-generate dataset descriptions instead of waiting on manual docs.',
+    output:`GET /catalog
+{
+  "orders_v1": {
+    "source": "openlineage-events + schema-events",
+    "enriched_by": "llm-gateway"
+  }
+}`,
+    status:'status not checked'
+  },
+  {
+    id:'airflow', icon:'🗓️', color:'#60a5fa', cat:'Orchestration',
+    title:'Airflow',
+    paper:'Domain 4 — Trustworthy MLOps', desc:'Schedules the batch drift check and periodic Isolation Forest retrain — thin HTTP triggers, no detection logic embedded in the DAGs themselves.',
+    output:`dag_id: batch_drift_check
+schedule: hourly drift check
+
+dag_id: isolation_forest_retrain
+schedule: periodic retrain`,
+    status:'status not checked'
+  },
+];
+
+const flowOrder = ['kafka','sidecar','schema','isoforest','drift','breaker','rca'];
+const flowEl = document.getElementById('flow');
+flowOrder.forEach((id,i)=>{
+  const s = services.find(x=>x.id===id);
+  const n = document.createElement('div');
+  n.className='node'; n.textContent = s.title;
+  n.style.color = s.color;
+  n.onclick = ()=>document.getElementById('card-'+id).scrollIntoView({behavior:'smooth',block:'center'});
+  flowEl.appendChild(n);
+  if(i<flowOrder.length-1){
+    const a = document.createElement('div'); a.className='arrow'; a.textContent='→';
+    flowEl.appendChild(a);
+  }
+});
+
+const cardState = {};
+const grid = document.getElementById('grid');
+services.forEach(s=>{
+  const card = document.createElement('div');
+  card.className='card'; card.id='card-'+s.id;
+  card.innerHTML = `
+    <div class="head">
+      <div class="icon" style="background:${s.color}22;color:${s.color}">${s.icon}</div>
+      <div>
+        <h3>${s.title}</h3>
+        <span class="tag" style="background:${s.color}22;color:${s.color}">${s.cat}</span>
+      </div>
+    </div>
+    <p class="paper">${s.paper}</p>
+    <p class="desc">${s.desc}</p>
+    <div class="status-line" id="status-${s.id}">● ${s.status}</div>
+    <button class="toggle" type="button">▸ Show live output</button>
+    <div class="output"><pre id="output-${s.id}"></pre>${s.note ? `<span class="note">${s.note}</span>` : ''}</div>
+  `;
+  const btn = card.querySelector('button.toggle');
+  const out = card.querySelector('.output');
+  card.querySelector('.output pre').textContent = s.output;
+  cardState[s.id] = {initial: s.output, api: '', event: '', apiStatus: null, eventStatus: ''};
+  btn.onclick = ()=>{
+    const open = out.classList.toggle('show');
+    btn.textContent = open ? '▾ Hide output' : '▸ Show live output';
+  };
+  grid.appendChild(card);
+});
+
+// ---- Shared card renderers (API status + latest Kafka event live side by side) ----
+function renderStatus(id){
+  const st = cardState[id], el = document.getElementById('status-'+id);
+  if(!st || !el) return;
+  const api = st.apiStatus;
+  const parts = [];
+  if(api) parts.push(api.text); else parts.push('status not checked');
+  if(st.eventStatus) parts.push(st.eventStatus);
+  el.textContent = '● ' + parts.join(' · ');
+  el.style.color = api ? api.color : (st.eventStatus ? 'var(--cyan)' : 'var(--muted)');
+}
+function renderOutput(id){
+  const st = cardState[id], out = document.getElementById('output-'+id);
+  if(!st || !out) return;
+  const parts = [];
+  if(st.api) parts.push(st.api);
+  if(st.event) parts.push(st.event);
+  out.textContent = parts.length ? parts.join('\n\n') : st.initial;
+}
+
+// ---- Live polling of the real local services ----
+// Primary: ask the bridge (GET /services) which polls every service server-side -> no CORS needed.
+// Fallback: call each service directly from the browser (works only if the service sends CORS headers).
+const directMap = {
+  sidecar:{port:8092,path:'/contracts'}, isoforest:{port:8093,path:'/health'},
+  drift:{port:8010,path:'/health'},      breaker:{port:8020,path:'/health'},
+  rca:{port:8030,path:'/health'},        schema:{port:8040,path:'/health'},
+  gateway:{port:8090,path:'/health'},    catalog:{port:8091,path:'/catalog'},
+  airflow:{port:18080,path:'/health'}
+};
+const directExtra = {
+  breaker:{port:8020,path:'/state/orders_pipeline_drift'},
+  rca:{port:8030,path:'/reports/orders_pipeline_drift?limit=1'},
+  isoforest:{port:8093,path:'/model-info'}
+};
+const composeName = {sidecar:'sidecar-validator', isoforest:'ml-isolation-forest', drift:'drift_monitor',
+  breaker:'circuit_breaker', rca:'rca_copilot', schema:'schema_healer', gateway:'llm-gateway',
+  catalog:'ai-catalog', airflow:'airflow-webserver'};
+const C_OK='var(--green)', C_WARN='var(--amber)', C_BAD='var(--red)';
+let pollTimer = null, pollRun = 0, pollInProgress = false;
+const pollControllers = new Set();
+const healthPill = document.querySelector('header.top .pill');
+
+function bridgeBase(){ return deriveHttpBase(document.getElementById('wsUrl').value.trim()); }
+const asList = d => Array.isArray(d) ? d : (d && typeof d === 'object' ? Object.keys(d) : []);
+
+// One-line human summary of a service from its API payload (+ optional detail payload)
+function summarize(id, data, extra){
+  try{
+    switch(id){
+      case 'isoforest': {
+        const loaded = data && data.model_loaded;
+        const n = data && data.bootstrap_buffer_size;
+        return {color: loaded ? C_OK : C_WARN,
+                text: loaded ? 'live: model loaded'+(extra&&extra.n_samples?' ('+extra.n_samples+' samples)':'')
+                             : 'live: no model yet (buffer '+n+') — send traffic or POST /retrain'};
+      }
+      case 'breaker': {
+        if(extra && extra.state){
+          const c = extra.state==='CLOSED' ? C_OK : extra.state==='OPEN' ? C_BAD : C_WARN;
+          return {color:c, text:'live: '+extra.state+' · trips '+extra.trip_count+' · failures '+extra.consecutive_failures};
+        }
+        return {color:C_OK, text:'live: reachable'};
+      }
+      case 'rca': {
+        const r = Array.isArray(extra) ? extra[0] : null;
+        return {color:C_OK, text: r ? 'live: latest RCA '+(r.severity||'?')+' / '+(r.root_cause_category||'?') : 'live: reachable · no RCA reports yet'};
+      }
+      case 'catalog': {
+        const n = asList(data).length;
+        return {color: n ? C_OK : C_WARN, text:'live: '+n+' catalog entr'+(n===1?'y':'ies')+(n?'':' (publish a schema-events message or run the generator)')};
+      }
+      case 'sidecar': {
+        const n = Array.isArray(data) ? data.length : (data && data.contracts ? asList(data.contracts).length : asList(data).length);
+        return {color:C_OK, text:'live: '+n+' contract'+(n===1?'':'s')+' loaded'};
+      }
+      case 'drift': return {color:C_OK, text:'live: monitoring '+((data&&data.monitor_name)||'—')};
+      default: return {color:C_OK, text:'live: '+((data&&data.status)||'reachable')};
+    }
+  }catch(e){ return {color:C_OK, text:'live: reachable'}; }
+}
+
+function applyResult(id, res, extraRes){
+  const st = cardState[id]; if(!st) return false;
+  if(res && res.ok){
+    st.apiStatus = summarize(id, res.data, extraRes && extraRes.ok ? extraRes.data : null);
+    const lat = res.latency_ms!=null ? '  ('+res.latency_ms+' ms)' : '';
+    st.api = 'LIVE API  GET '+res.path+lat+'\n'+JSON.stringify(res.data, null, 2).slice(0,1800)
+           + (extraRes && extraRes.ok ? '\n\nLIVE API  GET '+extraRes.path+'\n'+JSON.stringify(extraRes.data, null, 2).slice(0,1800) : '');
+    renderStatus(id); renderOutput(id);
+    return true;
+  }
+  const why = res && res.status ? 'HTTP '+res.status : 'unreachable';
+  const hint = res && !res.status ? ' — container stopped? docker compose up -d '+composeName[id] : '';
+  st.apiStatus = {color: res && res.status ? C_WARN : C_BAD, text:'live: '+why+hint};
+  st.api = 'LIVE API  GET '+(res?res.path:'')+'\n'+(res&&res.error?res.error:'no response');
+  renderStatus(id); renderOutput(id);
+  return false;
+}
+function setPill(ok, total, via){
+  const color = ok === total ? C_OK : ok === 0 ? C_BAD : C_WARN;
+  healthPill.innerHTML = '<span class="dot"></span>'+ok+'/'+total+' services reachable';
+  healthPill.style.color = color;
+  const dot = healthPill.querySelector('.dot'); dot.style.background = color; dot.style.boxShadow = '0 0 6px '+color;
+  document.getElementById('liveSummary').textContent = ok+'/'+total+' services reachable · via '+via+' · '+new Date().toLocaleTimeString();
+  document.getElementById('footLive').textContent = ok+'/'+total+' endpoints reachable at last poll';
+}
+
+async function pollViaBridge(run){
+  const ctrl = new AbortController(); pollControllers.add(ctrl);
+  const timer = setTimeout(()=>ctrl.abort(), 8000);
+  try{
+    const res = await fetch(bridgeBase()+'/services', {signal: ctrl.signal});
+    if(run !== pollRun) return null;
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const doc = await res.json();
+    if(run !== pollRun) return null;
+    let ok = 0, total = 0;
+    for(const id of Object.keys(directMap)){
+      total++;
+      const extraKey = {breaker:'breaker_state', rca:'rca_latest', isoforest:'isoforest_model'}[id];
+      if(applyResult(id, doc.services[id], extraKey ? doc.extra[extraKey] : null)) ok++;
+    }
+    const k = doc.kafka, ks = cardState['kafka'];
+    if(k && ks){
+      const seen = Object.values(k.topic_counts||{}).reduce((a,b)=>a+b,0);
+      ks.apiStatus = k.connected
+        ? {color: C_OK, text: 'live: broker connected via bridge ('+k.bootstrap+') · '+seen+' live msgs'}
+        : {color: C_BAD, text: 'live: bridge cannot reach Kafka ('+(k.last_error||'unknown')+') — is the broker up on '+k.bootstrap+'?'};
+      ks.api = 'BRIDGE  GET /services → kafka\n'+JSON.stringify(k, null, 2);
+      renderStatus('kafka'); renderOutput('kafka');
+    }
+    setPill(ok, total, 'bridge');
+    return true;
+  } finally { clearTimeout(timer); pollControllers.delete(ctrl); }
+}
+
+async function directFetch(base, cfg, run){
+  const ctrl = new AbortController(); pollControllers.add(ctrl);
+  const timer = setTimeout(()=>ctrl.abort(), 4000);
+  const t0 = performance.now();
+  try{
+    const res = await fetch(base+':'+cfg.port+cfg.path, {signal: ctrl.signal});
+    if(run !== pollRun) return null;
+    let data = null; try{ data = await res.json(); }catch(_){}
+    return {ok: res.ok, status: res.status, path: cfg.path, data, latency_ms: Math.round(performance.now()-t0)};
+  }catch(e){
+    if(run !== pollRun) return null;
+    return {ok:false, status:null, path:cfg.path, error:'blocked by CORS or offline ('+e.message+')'};
+  } finally { clearTimeout(timer); pollControllers.delete(ctrl); }
+}
+async function pollDirect(run){
+  const base = (document.getElementById('baseUrl').value || 'http://localhost').trim();
+  let ok = 0, total = 0;
+  for(const [id, cfg] of Object.entries(directMap)){
+    if(run !== pollRun) return;
+    total++;
+    const res = await directFetch(base, cfg, run); if(res === null) return;
+    const ex = directExtra[id] ? await directFetch(base, directExtra[id], run) : null;
+    if(applyResult(id, res, ex)) ok++;
+  }
+  if(run === pollRun) setPill(ok, total, 'direct browser calls');
+}
+
+async function pollOnce(run = pollRun){
+  if(pollInProgress) return;
+  pollInProgress = true;
+  try{
+    let done = null;
+    try{ done = await pollViaBridge(run); }catch(e){ done = null; }   // bridge down -> fall back
+    if(done === null && run === pollRun) await pollDirect(run);
+  } finally { pollInProgress = false; }
+}
+document.getElementById('pollBtn').onclick = ()=>{
+  const btn = document.getElementById('pollBtn');
+  if(pollTimer){
+    clearInterval(pollTimer); pollTimer = null;
+    pollRun++;
+    pollControllers.forEach(ctrl=>ctrl.abort());
+    pollControllers.clear();
+    btn.textContent = 'Start'; btn.classList.remove('stop');
+    document.getElementById('liveSummary').textContent = 'not polling';
+  } else {
+    btn.textContent = 'Stop'; btn.classList.add('stop');
+    const run = ++pollRun;
+    pollOnce(run);
+    pollTimer = setInterval(()=>pollOnce(run), 6000);
+  }
+};
+
+// ---- Trace a record through the pipeline ----
+const scenarios = [
+  { key:'clean', label:'Clean order', steps:[
+    {node:'kafka', title:'raw-data', body:'{\n  "order_id": "ord-1042",\n  "order_total": "142.50",\n  "payment_method": "credit_card"\n}'},
+    {node:'sidecar', title:'Sidecar Validator', body:'contract orders_v1 matched\nall fields present, types OK → forward'},
+    {node:'isoforest', title:'Isolation Forest', body:'{\n  "anomaly_score": -0.03,\n  "flagged": false\n}'},
+    {node:'drift', title:'Drift Monitor (hourly batch)', body:'record folded into next hourly window\n(evaluated in aggregate, not per-record)'},
+    {node:null, title:'→ validated-data ✅', body:'{\n  "order_id": "ord-1042",\n  "order_total": 142.5,\n  "payment_method": "credit_card"\n}'}
+  ]},
+  { key:'healed', label:'Schema mismatch → healed', steps:[
+    {node:'kafka', title:'raw-data', body:'{\n  "order_id": "test-order-001",\n  "order_amt": "89.99",\n  "payment_method": "credit_card",\n  "loyalty_tier": "gold"\n}'},
+    {node:'sidecar', title:'Sidecar Validator', body:'"order_total" missing, unexpected "order_amt"\n→ INVALID → schema_mismatch emitted to schema-evolution-requests'},
+    {node:'schema', title:'Schema Healer (phi4-mini)', body:'proposed ops:\n  rename_field(order_amt → order_total)\n  cast_type(order_total → float)\npost-heal re-validation: PASS'},
+    {node:null, title:'→ validated-data ✅', body:'{\n  "order_id": "test-order-001",\n  "order_total": 89.99,\n  "payment_method": "credit_card",\n  "loyalty_tier": "gold"\n}\nreason: healed_and_revalidated_with_deterministic_rename'}
+  ]},
+  { key:'rejected', label:'Schema mismatch → rejected (real)', steps:[
+    {node:'kafka', title:'raw-data', body:'{\n  "order_id": "test-order-001",\n  "order_amt": "89.99",\n  "payment_method": "credit_card"\n}'},
+    {node:'sidecar', title:'Sidecar Validator', body:'"order_total" missing → INVALID → schema_mismatch emitted'},
+    {node:'schema', title:'Schema Healer (phi4-mini)', body:'LLM returned:  {"op": "rename_field"}   ← source/target omitted\nmapping_ops.py rejects:\n  "source Field required"\n  "target Field required"'},
+    {node:null, title:'→ dead-letter-queue ⛔', body:'original record preserved unchanged\n_schema_healer.success: false\nreason: mapping_rejected'}
+  ]},
+  { key:'drift', label:'Drift detected → breaker trips', steps:[
+    {node:'drift', title:'Drift Monitor — hourly /check', body:'reference window: 2999 rows (14 days)\ncurrent window: 402 rows (last hour)\ndrift_share: 0.5714 → dataset_drift_detected: true'},
+    {node:'breaker', title:'Circuit Breaker', body:'incident #3 for orders_pipeline_drift\nconsecutive_failures: 3 → TRIP\nstate: CLOSED → OPEN (cooldown 263s)'},
+    {node:'rca', title:'RCA Copilot (HALF_OPEN trial, after cooldown)', body:'{\n  "root_cause_category": "legitimate_business_shift",\n  "severity": "low",\n  "confidence": 0.87\n}'},
+    {node:null, title:'→ breaker resets ✅', body:'outcome_success: true\nstate: HALF_OPEN → CLOSED'}
+  ]}
+];
+const stepColor = {kafka:'#60a5fa', sidecar:'#34d399', schema:'#a78bfa', isoforest:'#22d3ee', drift:'#22d3ee', breaker:'#fbbf24', rca:'#a78bfa'};
+const chipsEl = document.getElementById('chips');
+let traceTimers = [];
+scenarios.forEach(sc=>{
+  const c = document.createElement('button');
+  c.className = 'chip'; c.type = 'button'; c.textContent = sc.label;
+  c.onclick = ()=>{
+    document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));
+    c.classList.add('active');
+    runTrace(sc);
+  };
+  chipsEl.appendChild(c);
+});
+function runTrace(sc){
+  const log = document.getElementById('traceLog');
+  traceTimers.forEach(clearTimeout);
+  traceTimers = [];
+  log.innerHTML = '';
+  sc.steps.forEach((st,i)=>{
+    traceTimers.push(setTimeout(()=>{
+      const c = stepColor[st.node] || '#8c9ab3';
+      const div = document.createElement('div');
+      div.className = 'step'; div.style.borderLeftColor = c;
+      div.innerHTML = '<div class="sh" style="color:'+c+'">'+(i+1)+'. '+st.title+'</div><pre></pre>';
+      div.querySelector('pre').textContent = st.body;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }, i*750));
+  });
+}
+
+// ---- Live Kafka event stream (via datashield_bridge.py) ----
+let ws = null, wsWantConnected = false, wsEverOpened = false, wsFailures = 0;
+const seenEvents = new Set();
+const topicCounts = {};
+function renderCounts(){
+  const keys = Object.keys(topicCounts);
+  document.getElementById('topicCounts').textContent = keys.length
+    ? keys.sort().map(k=>k+' ×'+topicCounts[k]).join('   ')
+    : 'no events yet';
+}
+function addFeedItem(ev){
+  const key = ev.id || (ev.topic+'|'+ev.received_at+'|'+JSON.stringify(ev.payload).length);
+  if(seenEvents.has(key)) return;               // WS reconnect / REST poll can resend backlog
+  seenEvents.add(key);
+  if(seenEvents.size > 5000){ seenEvents.delete(seenEvents.values().next().value); }
+  topicCounts[ev.topic] = (topicCounts[ev.topic]||0)+1; renderCounts();
+
+  const feed = document.getElementById('eventFeed');
+  if(feed.querySelector('.step .sh[data-placeholder]')) feed.innerHTML = '';
+  const c = stepColor[ev.card] || '#22d3ee';
+  const t = new Date(ev.received_at).toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = 'step'; div.style.borderLeftColor = c;
+  const sh = document.createElement('div'); sh.className = 'sh'; sh.style.color = c;
+  sh.textContent = ev.topic+' · '+t+(ev.replayed ? ' · history' : '');
+  const pre = document.createElement('pre'); pre.textContent = JSON.stringify(ev.payload, null, 2);
+  div.appendChild(sh); div.appendChild(pre);
+  feed.appendChild(div);
+  while(feed.children.length > 120) feed.removeChild(feed.firstChild);
+  feed.scrollTop = feed.scrollHeight;
+
+  const st = cardState[ev.card];
+  if(st){
+    st.event = 'LATEST KAFKA EVENT  '+ev.topic+(ev.replayed?' (history)':'')+' @ '+t+'\n'+JSON.stringify(ev.payload, null, 2).slice(0,1800);
+    st.eventStatus = (ev.replayed ? 'history: ' : 'event: ')+ev.topic+' @ '+t;
+    renderStatus(ev.card); renderOutput(ev.card);
+    if(!ev.replayed){
+      const card = document.getElementById('card-'+ev.card);
+      card.classList.add('flash'); setTimeout(()=>card.classList.remove('flash'), 900);
+    }
+  }
+}
+function setWsStatus(t){ document.getElementById('wsStatus').textContent = t; }
+function connectWs(url){
+  try{ ws = new WebSocket(url); } catch(e){ setWsStatus('invalid URL'); return; }
+  setWsStatus('connecting…');
+  const mine = ws;
+  mine.onopen = ()=>{
+    wsEverOpened = true; wsFailures = 0;
+    setWsStatus('connected');
+    document.getElementById('wsBtn').textContent = 'Disconnect';
+  };
+  mine.onmessage = (m)=>{ try{ addFeedItem(JSON.parse(m.data)); }catch(e){} };
+  mine.onclose = ()=>{
+    if(ws !== mine) return;
+    if(!wsWantConnected){ setWsStatus('disconnected'); return; }
+    wsFailures++;
+    // Two failed attempts and never connected -> proxy/WebSocket blocked: switch to REST polling automatically.
+    if(!wsEverOpened && wsFailures >= 2){ document.getElementById('restBtn').click(); return; }
+    setWsStatus('reconnecting…');
+    setTimeout(()=>{ if(wsWantConnected && ws === mine) connectWs(url); }, 3000);
+  };
+  mine.onerror = ()=>{ setWsStatus('error — is `python frontend/datashield_bridge.py` running?'); };
+}
+document.getElementById('wsBtn').onclick = ()=>{
+  if(ws){
+    wsWantConnected = false; const w = ws; ws = null; w.close();
+    document.getElementById('wsBtn').textContent = 'Connect';
+    setWsStatus('disconnected');
+    return;
+  }
+  stopRestPoll();
+  wsWantConnected = true; wsEverOpened = false; wsFailures = 0;
+  connectWs(document.getElementById('wsUrl').value.trim());
+};
+document.getElementById('clearBtn').onclick = ()=>{
+  document.getElementById('eventFeed').innerHTML = '';
+  for(const k of Object.keys(topicCounts)) delete topicCounts[k];
+  renderCounts();                                  // seenEvents is kept so cleared history does not reappear
+};
+
+// ---- REST-polling fallback (for when WebSockets are blocked by a proxy/network) ----
+let restTimer = null;
+function deriveHttpBase(url){
+  let h = (url || '').replace(/^wss:\/\//,'https://').replace(/^ws:\/\//,'http://');
+  h = h.replace(/\/ws\/?$/, '');
+  return h || 'http://localhost:8099';
+}
+async function restPollOnce(){
+  try{
+    const res = await fetch(bridgeBase()+'/events/recent?limit=150');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    (await res.json()).forEach(addFeedItem);       // addFeedItem dedupes by event id
+    setWsStatus('REST polling · last check '+new Date().toLocaleTimeString());
+  }catch(e){
+    setWsStatus('REST poll failed: '+e.message+' (is the bridge running?)');
+  }
+}
+function stopRestPoll(){
+  if(restTimer){ clearInterval(restTimer); restTimer = null; }
+  document.getElementById('restBtn').textContent = 'REST fallback';
+}
+document.getElementById('restBtn').onclick = ()=>{
+  if(restTimer){ stopRestPoll(); setWsStatus('disconnected'); return; }
+  if(ws){ wsWantConnected = false; const w = ws; ws = null; w.close(); document.getElementById('wsBtn').textContent = 'Connect'; }
+  document.getElementById('restBtn').textContent = 'Stop REST poll';
+  restPollOnce();
+  restTimer = setInterval(restPollOnce, 3000);
+};
+
+// ---- Auto-start: connect the stream and begin polling as soon as the page opens locally ----
+window.addEventListener('load', ()=>{
+  if(location.protocol === 'https:'){ setWsStatus('hosted https page cannot reach localhost — open the local file'); return; }
+  if(new URLSearchParams(location.search).has('manual')) return;
+  document.getElementById('wsBtn').click();
+  document.getElementById('pollBtn').click();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,293 @@
+# DataShield AI — Render Blueprint
+# -----------------------------------------------------------------------------
+# Deploy: push this to your repo root, then in Render: New -> Blueprint,
+# point it at the repo. Render parses this file and proposes every service
+# below for you to review before creating anything.
+#
+# Architecture decisions this file makes (see DEPLOY_RENDER.md for the why):
+#   - Kafka/Zookeeper are NOT defined here — Render has no managed Kafka and
+#     no GPU tier, and self-hosting a stateful broker pair as Render private
+#     services is more fragile than it's worth. Point KAFKA_BOOTSTRAP_SERVERS
+#     (set manually per service after first deploy) at an external managed
+#     Kafka — Confluent Cloud is the default assumption, hence the
+#     KAFKA_SECURITY_PROTOCOL=SASL_SSL defaults below.
+#   - Airflow is NOT deployed here. Its two DAGs are just periodic HTTP
+#     triggers — replaced below with two `cron` jobs instead of hosting
+#     Airflow's webserver+scheduler+metadata DB. Remove the cron jobs and
+#     add Airflow back as its own `web` service if you need the DAG UI.
+#   - ollama is a private service (internal-only) — CPU-only, no GPU
+#     available on Render at any plan. Expect much higher latency than your
+#     local GPU run for schema_healer/rca_copilot.
+#   - Every service the dashboard polls directly from the browser must be
+#     `type: web` (publicly reachable) — Render private services cannot be
+#     reached from a browser at all. That's a real exposure trade-off for a
+#     project with no auth layer; consider adding one before treating this
+#     as more than a demo/capstone deployment.
+#
+#   - Render web services must listen on whatever port Render tells them to
+#     via the $PORT env var (it defaults to 10000, not 8000). Every core
+#     service below is assumed to still hardcode `--port 8000` the way your
+#     docker-compose.yml's containers do — so each one below needs `PORT:
+#     "8000"` added as an env var (not yet in this file — add it per
+#     service, or change each Dockerfile's CMD to honor $PORT instead).
+#
+# After first deploy, go to each service's Environment tab and fill in the
+# `sync: false` values (Kafka credentials, etc.) — Render prompts for these
+# rather than storing secrets in the blueprint itself.
+
+databases:
+  - name: datashield-postgres
+    databaseName: datashield
+    user: datashield
+    plan: starter
+    postgresMajorVersion: "16"
+    # pgvector isn't enabled by default — after first deploy, connect with
+    # `psql` (connection string on the database's Render page) and run:
+    #   CREATE EXTENSION IF NOT EXISTS vector;
+
+services:
+  # ---------------------------------------------------------------------
+  # Self-hosted LLM backend (CPU-only on Render — see note above)
+  # ---------------------------------------------------------------------
+  - type: pserv
+    name: datashield-ollama
+    runtime: docker
+    repo: https://github.com/ollama/ollama.git
+    plan: standard
+    envVars:
+      - key: OLLAMA_HOST
+        value: 0.0.0.0
+    disk:
+      name: ollama-models
+      mountPath: /root/.ollama
+      sizeGB: 15
+    # Render Blueprints don't have an init-container equivalent, so pull the
+    # models on first boot via a start command override in the dashboard
+    # instead of docker-compose's separate `ollama-init` service:
+    #   ollama serve & sleep 5 && ollama pull phi4-mini && wait
+
+  # ---------------------------------------------------------------------
+  # Core pipeline services — each mirrors a services/<name> Dockerfile
+  # ---------------------------------------------------------------------
+  - type: web
+    name: sidecar-validator
+    runtime: docker
+    rootDir: services/sidecar_validator
+    plan: starter
+    healthCheckPath: /contracts
+    envVars:
+      - key: POSTGRES_APP_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+
+  - type: web
+    name: ml-isolation-forest
+    runtime: docker
+    rootDir: services/ml_isolation_forest
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: POSTGRES_APP_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+
+  - type: web
+    name: drift-monitor
+    runtime: docker
+    rootDir: services/drift_monitor
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: DATASHIELD_POSTGRES_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+
+  - type: web
+    name: circuit-breaker
+    runtime: docker
+    rootDir: services/circuit_breaker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: DATASHIELD_POSTGRES_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+
+  - type: web
+    name: rca-copilot
+    runtime: docker
+    rootDir: services/rca_copilot
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: DATASHIELD_POSTGRES_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+      - key: OLLAMA_HOST
+        fromService: {type: pserv, name: datashield-ollama, property: hostport}
+      - key: CIRCUIT_BREAKER_URL
+        fromService: {type: web, name: circuit-breaker, property: hostport}
+
+  - type: web
+    name: schema-healer
+    runtime: docker
+    rootDir: services/schema_healer
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: DATASHIELD_POSTGRES_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+      - key: OLLAMA_HOST
+        fromService: {type: pserv, name: datashield-ollama, property: hostport}
+
+  - type: web
+    name: llm-gateway
+    runtime: docker
+    rootDir: services/llm_gateway
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: POSTGRES_APP_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: OLLAMA_HOST
+        fromService: {type: pserv, name: datashield-ollama, property: hostport}
+      - key: CHEAP_MODEL
+        value: phi4-mini
+      - key: STRONG_MODEL
+        value: llama3.1:8b
+      - key: SEMANTIC_CACHE_THRESHOLD
+        value: "0.94"
+
+  - type: web
+    name: ai-catalog
+    runtime: docker
+    rootDir: services/ai_catalog
+    plan: starter
+    healthCheckPath: /catalog
+    envVars:
+      - key: POSTGRES_APP_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+      - key: LLM_GATEWAY_URL
+        fromService: {type: web, name: llm-gateway, property: hostport}
+
+  # ---------------------------------------------------------------------
+  # Frontend: bridge (now just another deployed service — no more local-
+  # only Kafka workaround) + the static dashboard
+  # ---------------------------------------------------------------------
+  - type: web
+    name: dashboard-bridge
+    runtime: docker
+    rootDir: frontend
+    dockerCommand: python datashield_bridge.py
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: DATASHIELD_KAFKA_BOOTSTRAP
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+      - key: BRIDGE_PORT
+        value: "10000"   # Render web services must listen on $PORT; see DEPLOY_RENDER.md
+
+  - type: web
+    name: dashboard
+    runtime: static
+    rootDir: frontend
+    staticPublishPath: .
+    buildCommand: "true"
+
+  # ---------------------------------------------------------------------
+  # Replaces the two Airflow DAGs — see the note at the top of this file
+  # ---------------------------------------------------------------------
+  - type: cron
+    name: hourly-drift-check
+    runtime: docker
+    rootDir: services/drift_monitor
+    schedule: "0 * * * *"
+    dockerCommand: >-
+      sh -c "curl -sf -X POST -H 'Content-Type: application/json' -d '{}'
+      http://localhost:${PORT:-8000}/check || true"
+    # NOTE: confirm the real request body /check expects — your own
+    # handoff report flags a 422 on an empty POST as still unresolved.
+
+  # - type: cron
+  #   name: isolation-forest-retrain
+  #   runtime: docker
+  #   rootDir: services/ml_isolation_forest
+  #   schedule: "0 3 * * *"
+  #   dockerCommand: >-
+  #     sh -c "curl -sf -X POST http://localhost:${PORT:-8000}/retrain || true"
+  #   # Uncomment once you confirm ml_isolation_forest actually exposes a
+  #   # /retrain (or equivalent) HTTP endpoint — not confirmed from what
+  #   # I've seen of this service.

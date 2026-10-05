@@ -1,0 +1,47 @@
+# docker-compose.snippet.yml (Week 5 — schema_healer, Paper 8)
+#
+# ALREADY MERGED into the docker-compose.yml delivered in this same patch
+# (per the live-test report's recommendation #4) — a plain
+# `docker compose up -d` starts schema_healer now, no -f override needed.
+# This file is kept only as a standalone reference / for merging into a
+# docker-compose.yml you've since modified yourself.
+#
+# No new Kafka topics needed: schema_healer reuses schema-events (already
+# created for sidecar_validator + ai_catalog), validated-data (already
+# created for ml-isolation-forest), and dead-letter-queue (already created
+# for sidecar_validator's DLQ). Confirm all three exist with
+# `docker compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list`
+# before wiring this in — if any are missing, add them to kafka/topics.sh
+# the same way drift-events was added in Week 3.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Week 5 — LLM-Assisted Schema Evolution / Healer (Paper 8)
+  # Consumes schema-events (schema_mismatch subtype only); heals via a closed
+  # JSON mapping-op vocabulary proposed by the LLM (never raw code — see
+  # healer/mapping_ops.py) and re-validates against the same contract before
+  # publishing to validated-data. Failures go to dead-letter-queue.
+  # ---------------------------------------------------------------------------
+  schema_healer:
+    build: ./services/schema_healer
+    container_name: schema_healer
+    environment:
+      DATASHIELD_POSTGRES_DSN: postgresql://datashield:${POSTGRES_APP_PASSWORD:-datashield}@postgres:5432/datashield
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_HEALER_CONFIG_PATH: /app/config/schema_healer_config.yaml
+    ports:
+      - "8040:8000"
+    volumes:
+      - ./contracts:/app/contracts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    networks:
+      - datashield-net
+    restart: unless-stopped

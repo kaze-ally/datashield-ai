@@ -1,0 +1,25 @@
+# contracts/examples/orders_v1.yaml
+#
+# Referenced by README_week3.md as the schema `drift_detection_config.yaml`
+# should stay in sync with. If your real file already exists with this
+# shape, you don't need this one — contract_loader.py just needs
+# `contract_name`, `version`, and a `fields` list with `name`/`type`/
+# `required`/(optional)`allowed_values` keys. Included here so
+# schema_healer has something to heal against out of the box.
+
+contract_name: orders_v1
+version: 1
+fields:
+  - name: order_id
+    type: string
+    required: true
+  - name: order_total
+    type: float
+    required: true
+  - name: payment_method
+    type: string
+    required: true
+    allowed_values: [card, paypal, cod, credit_card, debit_card, gift_card]
+  - name: currency
+    type: string
+    required: false

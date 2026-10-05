@@ -1,0 +1,44 @@
+# =============================================================================
+# Example dag-factory config — one YAML per onboarded data producer.
+# Copy this file, rename it (e.g. `orders_pipeline.yaml`), and point it at the
+# producer's data contract (see /contracts/examples/orders_v1.yaml).
+# =============================================================================
+default:
+  default_args:
+    owner: "datashield-platform"
+    retries: 2
+    start_date: "2026-08-24"
+    retry_delay:
+      __type__: datetime.timedelta
+      seconds: 300
+    schedule: "@hourly"
+    catchup: false
+    dagrun_timeout:
+      __type__: datetime.timedelta
+      seconds: 1800
+
+orders_validation_pipeline:
+  default_args:
+    owner: "datashield-platform"
+  description: "Validate the orders contract, trigger drift monitoring, and touch the catalog API in sequence."
+  schedule: "@hourly"
+  tasks:
+    check_contracts:
+      operator: airflow.providers.http.operators.http.HttpOperator
+      http_conn_id: sidecar_validator_api
+      endpoint: "/contracts"
+      method: GET
+    trigger_drift_check:
+      operator: airflow.providers.http.operators.http.HttpOperator
+      http_conn_id: drift_monitor_api
+      endpoint: "/check"
+      method: POST
+      headers: {"Content-Type": "application/json"}
+      data: "{}"
+      dependencies: [check_contracts]
+    touch_catalog:
+      operator: airflow.providers.http.operators.http.HttpOperator
+      http_conn_id: ai_catalog_api
+      endpoint: "/catalog"
+      method: GET
+      dependencies: [trigger_drift_check]
