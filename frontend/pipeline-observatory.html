@@ -684,16 +684,6 @@ document.getElementById('restBtn').onclick = ()=>{
 
 // ---- Auto-start: connect the stream and begin polling as soon as the page opens locally ----
 window.addEventListener('load', ()=>{
-  if(location.hostname.endsWith('.onrender.com')){
-    document.getElementById('liveBar').style.display = 'none';
-    document.getElementById('liveStreamPanel').style.display = 'none';
-    document.querySelector('main > p.sub').textContent =
-      'Interactive DataShield AI architecture demo. Live Kafka and API services are not included in the free static deployment.';
-    healthPill.innerHTML = '<span class="dot"></span>interactive demo';
-    document.getElementById('liveSummary').textContent = 'demo mode · backend services not connected';
-    document.getElementById('footLive').textContent = 'Static demo — live pipeline services require a paid deployment';
-    return;
-  }
   if(location.host){
     const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     document.getElementById('wsUrl').value = wsProtocol+'//'+location.host+'/ws';
