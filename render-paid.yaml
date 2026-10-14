@@ -1,0 +1,248 @@
+# DataShield AI Render Blueprint
+# Deploy from the DataShield AI repository root with Render -> New -> Blueprint.
+# Kafka is external; provide its broker address and SASL credentials at creation.
+
+databases:
+  - name: datashield-postgres
+    databaseName: datashield
+    user: datashield
+    plan: 0.5c-1g
+    postgresMajorVersion: "16"
+
+services:
+  # APIs remain private. The public dashboard bridge is the only HTTP entry point.
+  - type: pserv
+    name: sidecar-validator
+    runtime: docker
+    dockerfilePath: services/sidecar_validator/Dockerfile
+    dockerContext: .
+    plan: 0.5c-512mb
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: POSTGRES_APP_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+      - key: CONTRACTS_DIR
+        value: /app/contracts
+
+  - type: pserv
+    name: ml-isolation-forest
+    runtime: docker
+    dockerfilePath: services/ml_isolation_forest/Dockerfile
+    dockerContext: .
+    plan: 1c-2g
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: POSTGRES_APP_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+
+  - type: pserv
+    name: drift-monitor
+    runtime: docker
+    dockerfilePath: services/drift_monitor/Dockerfile
+    dockerContext: .
+    plan: 1c-2g
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DATASHIELD_POSTGRES_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+
+  - type: pserv
+    name: circuit-breaker
+    runtime: docker
+    dockerfilePath: services/circuit_breaker/Dockerfile
+    dockerContext: .
+    plan: 0.5c-512mb
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DATASHIELD_POSTGRES_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+
+  - type: pserv
+    name: rca-copilot
+    runtime: docker
+    dockerfilePath: services/rca_copilot/Dockerfile
+    dockerContext: .
+    plan: 1c-2g
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DATASHIELD_POSTGRES_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+      - key: OLLAMA_HOSTPORT
+        fromService: {type: pserv, name: datashield-ollama, property: hostport}
+      - key: CIRCUIT_BREAKER_HOSTPORT
+        fromService: {type: pserv, name: circuit-breaker, property: hostport}
+
+  - type: pserv
+    name: schema-healer
+    runtime: docker
+    dockerfilePath: services/schema_healer/Dockerfile
+    dockerContext: .
+    plan: 1c-2g
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DATASHIELD_POSTGRES_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+      - key: OLLAMA_HOSTPORT
+        fromService: {type: pserv, name: datashield-ollama, property: hostport}
+
+  - type: pserv
+    name: llm-gateway
+    runtime: docker
+    dockerfilePath: services/llm_gateway/Dockerfile
+    dockerContext: .
+    plan: 1c-2g
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: POSTGRES_APP_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: OLLAMA_HOSTPORT
+        fromService: {type: pserv, name: datashield-ollama, property: hostport}
+
+  - type: pserv
+    name: ai-catalog
+    runtime: docker
+    dockerfilePath: services/ai_catalog/Dockerfile
+    dockerContext: .
+    plan: 0.5c-512mb
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: POSTGRES_APP_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+      - key: LLM_GATEWAY_HOSTPORT
+        fromService: {type: pserv, name: llm-gateway, property: hostport}
+
+  - type: pserv
+    name: datashield-ollama
+    runtime: image
+    image:
+      url: ollama/ollama:latest
+    plan: 2c-8g
+    dockerCommand: ollama serve
+    disk:
+      name: ollama-models
+      mountPath: /root/.ollama
+      sizeGB: 20
+    initialDeployHook: ollama pull phi4-mini && ollama pull llama3.1:8b
+    envVars:
+      - key: OLLAMA_HOST
+        value: 0.0.0.0:11434
+
+  - type: web
+    name: dashboard
+    runtime: docker
+    dockerfilePath: frontend/Dockerfile
+    dockerContext: .
+    plan: 0.5c-512mb
+    healthCheckPath: /health
+    preDeployCommand: python /app/render_init_db.py
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: BRIDGE_PORT
+        value: "10000"
+      - key: POSTGRES_APP_DSN
+        fromDatabase: {name: datashield-postgres, property: connectionString}
+      - key: DATASHIELD_KAFKA_BOOTSTRAP
+        sync: false
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: PLAIN
+      - key: KAFKA_SASL_USERNAME
+        sync: false
+      - key: KAFKA_SASL_PASSWORD
+        sync: false
+      - key: DATASHIELD_SIDECAR_HOSTPORT
+        fromService: {type: pserv, name: sidecar-validator, property: hostport}
+      - key: DATASHIELD_ISOFOREST_HOSTPORT
+        fromService: {type: pserv, name: ml-isolation-forest, property: hostport}
+      - key: DATASHIELD_DRIFT_HOSTPORT
+        fromService: {type: pserv, name: drift-monitor, property: hostport}
+      - key: DATASHIELD_BREAKER_HOSTPORT
+        fromService: {type: pserv, name: circuit-breaker, property: hostport}
+      - key: DATASHIELD_RCA_HOSTPORT
+        fromService: {type: pserv, name: rca-copilot, property: hostport}
+      - key: DATASHIELD_SCHEMA_HOSTPORT
+        fromService: {type: pserv, name: schema-healer, property: hostport}
+      - key: DATASHIELD_GATEWAY_HOSTPORT
+        fromService: {type: pserv, name: llm-gateway, property: hostport}
+      - key: DATASHIELD_CATALOG_HOSTPORT
+        fromService: {type: pserv, name: ai-catalog, property: hostport}
