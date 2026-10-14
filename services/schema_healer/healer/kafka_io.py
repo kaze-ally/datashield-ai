@@ -36,6 +36,7 @@ import uuid
 from datetime import datetime, timezone
 
 from kafka import KafkaConsumer, KafkaProducer
+from kafka_config import kafka_client_config
 from kafka.errors import KafkaError
 
 logger = logging.getLogger("schema_healer.kafka_io")
@@ -65,6 +66,7 @@ class SchemaHealerPublisher:
         self.dlq_topic = dlq_topic
         self._producer = KafkaProducer(
             bootstrap_servers=bootstrap_servers,
+            **kafka_client_config(),
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
             acks="all",
         )
@@ -122,6 +124,7 @@ class SchemaHealerConsumer:
         consumer = KafkaConsumer(
             self.topic,
             bootstrap_servers=self.bootstrap_servers,
+            **kafka_client_config(),
             group_id=self.group_id,
             value_deserializer=lambda v: json.loads(v.decode("utf-8")),
             auto_offset_reset="earliest",

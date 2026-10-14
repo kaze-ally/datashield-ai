@@ -2,12 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY services/rca_copilot/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY rca/ ./rca/
-COPY config/ ./config/
-COPY main.py .
+COPY services/rca_copilot/rca/ ./rca/
+COPY services/rca_copilot/config/ ./config/
+COPY services/rca_copilot/main.py ./main.py
+COPY shared/kafka_config.py ./kafka_config.py
 
 EXPOSE 8000
 

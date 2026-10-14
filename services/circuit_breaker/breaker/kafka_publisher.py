@@ -15,6 +15,7 @@ import logging
 from typing import Any, Dict
 
 from kafka import KafkaProducer
+from kafka_config import kafka_client_config
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 def publish(bootstrap_servers: str, topic: str, event: Dict[str, Any]) -> None:
     producer = KafkaProducer(
         bootstrap_servers=bootstrap_servers,
+        **kafka_client_config(),
         value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
         acks="all",
         retries=3,

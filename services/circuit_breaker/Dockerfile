@@ -2,12 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY services/circuit_breaker/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY breaker/ ./breaker/
-COPY config/ ./config/
-COPY main.py .
+COPY services/circuit_breaker/breaker/ ./breaker/
+COPY services/circuit_breaker/config/ ./config/
+COPY services/circuit_breaker/main.py ./main.py
+COPY shared/kafka_config.py ./kafka_config.py
 
 EXPOSE 8000
 

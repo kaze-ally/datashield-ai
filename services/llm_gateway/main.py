@@ -36,6 +36,8 @@ from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
+if os.environ.get("OLLAMA_HOSTPORT"):
+    OLLAMA_HOST = "http://" + os.environ["OLLAMA_HOSTPORT"]
 CHEAP_MODEL = os.environ.get("CHEAP_MODEL", "phi4-mini")
 STRONG_MODEL = os.environ.get("STRONG_MODEL", "llama3.1:8b")
 POSTGRES_APP_DSN = os.environ.get("POSTGRES_APP_DSN", "")

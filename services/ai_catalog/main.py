@@ -40,12 +40,15 @@ import psycopg2
 import requests
 from fastapi import FastAPI, HTTPException
 from kafka import KafkaConsumer
+from kafka_config import kafka_client_config
 
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 LINEAGE_TOPIC = os.environ.get("LINEAGE_TOPIC", "openlineage-events")
 SCHEMA_TOPIC = os.environ.get("SCHEMA_TOPIC", "schema-events")
 POSTGRES_APP_DSN = os.environ.get("POSTGRES_APP_DSN", "")
 LLM_GATEWAY_URL = os.environ.get("LLM_GATEWAY_URL", "http://llm-gateway:8000")
+if os.environ.get("LLM_GATEWAY_HOSTPORT"):
+    LLM_GATEWAY_URL = "http://" + os.environ["LLM_GATEWAY_HOSTPORT"]
 CONSUMER_RECONNECT_SECONDS = 5
 CONSUMER_POLL_TIMEOUT_MS = 1000
 MAX_ATTEMPTS = 4
@@ -236,6 +239,7 @@ def consume_loop(stop_event: threading.Event) -> None:
                 SCHEMA_TOPIC,
                 LINEAGE_TOPIC,
                 bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+                **kafka_client_config(),
                 value_deserializer=None,
                 auto_offset_reset="earliest",
                 enable_auto_commit=False,

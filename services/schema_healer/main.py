@@ -31,6 +31,8 @@ with open(CONFIG_PATH) as f:
 
 POSTGRES_DSN = os.environ["DATASHIELD_POSTGRES_DSN"]
 KAFKA_BOOTSTRAP_SERVERS = os.environ["KAFKA_BOOTSTRAP_SERVERS"]
+if os.environ.get("OLLAMA_HOSTPORT"):
+    CONFIG["llm"]["base_url"] = "http://" + os.environ["OLLAMA_HOSTPORT"]
 
 contracts = ContractStore(CONFIG["contracts"]["dir"])
 repo = SchemaHealerRepository(POSTGRES_DSN)

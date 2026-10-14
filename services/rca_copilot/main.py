@@ -29,6 +29,10 @@ POSTGRES_DSN = os.environ.get("DATASHIELD_POSTGRES_DSN", "")
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 
 config = load_rca_config(CONFIG_PATH)
+if os.environ.get("OLLAMA_HOSTPORT"):
+    config.llm.base_url = "http://" + os.environ["OLLAMA_HOSTPORT"]
+if os.environ.get("CIRCUIT_BREAKER_HOSTPORT"):
+    config.context.circuit_breaker_url = "http://" + os.environ["CIRCUIT_BREAKER_HOSTPORT"]
 app = FastAPI(title="DataShield AI — RCA Copilot", version="0.1.0")
 
 _stop_event = threading.Event()

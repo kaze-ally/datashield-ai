@@ -652,7 +652,10 @@ document.getElementById('restBtn').onclick = ()=>{
 
 // ---- Auto-start: connect the stream and begin polling as soon as the page opens locally ----
 window.addEventListener('load', ()=>{
-  if(location.protocol === 'https:'){ setWsStatus('hosted https page cannot reach localhost — open the local file'); return; }
+  if(location.host){
+    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    document.getElementById('wsUrl').value = wsProtocol+'//'+location.host+'/ws';
+  }
   if(new URLSearchParams(location.search).has('manual')) return;
   document.getElementById('wsBtn').click();
   document.getElementById('pollBtn').click();

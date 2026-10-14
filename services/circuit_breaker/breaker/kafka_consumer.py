@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Dict, Optional
 
 from kafka import KafkaConsumer
+from kafka_config import kafka_client_config
 
 from breaker.admission import BlockThrottle, EventAdmission
 from breaker.config import CircuitBreakerConfig, SourceConfig
@@ -165,6 +166,7 @@ def run_consumer_loop(
                 consumer = KafkaConsumer(
                     *topics,
                     bootstrap_servers=kafka_bootstrap,
+                    **kafka_client_config(),
                     group_id="circuit-breaker",
                     value_deserializer=lambda v: json.loads(v.decode("utf-8")),
                     auto_offset_reset="latest",

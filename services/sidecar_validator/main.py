@@ -49,6 +49,7 @@ import psycopg2
 import yaml
 from fastapi import FastAPI
 from kafka import KafkaConsumer, KafkaProducer
+from kafka_config import kafka_client_config
 from kafka.structs import OffsetAndMetadata, TopicPartition
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -221,6 +222,7 @@ def get_producer() -> KafkaProducer:
         if _producer is None:
             _producer = KafkaProducer(
                 bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+                **kafka_client_config(),
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
                 retries=5,
             )
@@ -320,6 +322,7 @@ def consume_validated_topic() -> None:
             consumer = KafkaConsumer(
                 VALIDATED_TOPIC,
                 bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+                **kafka_client_config(),
                 value_deserializer=lambda value: value,
                 auto_offset_reset="earliest",
                 enable_auto_commit=False,
@@ -374,6 +377,7 @@ def consume_topic(source_topic: str, contract: dict[str, Any]) -> None:
     consumer = KafkaConsumer(
         source_topic,
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+        **kafka_client_config(),
         value_deserializer=lambda v: v,  # decode manually so bad JSON is a violation, not a crash
         auto_offset_reset="earliest",
         group_id="sidecar-validator",

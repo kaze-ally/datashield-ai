@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from kafka import KafkaConsumer
+from kafka_config import kafka_client_config
 
 from rca.circuit_breaker_client import report_outcome
 from rca.config import RCAConfig
@@ -122,6 +123,7 @@ def run_consumer_loop(stop_event: threading.Event, dsn: str, kafka_bootstrap: st
                 consumer = KafkaConsumer(
                     config.source.topic,
                     bootstrap_servers=kafka_bootstrap,
+                    **kafka_client_config(),
                     group_id="rca-copilot",
                     value_deserializer=lambda v: json.loads(v.decode("utf-8")),
                     auto_offset_reset="latest",

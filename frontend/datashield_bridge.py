@@ -38,6 +38,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from kafka import KafkaConsumer, TopicPartition
 
 KAFKA_BOOTSTRAP = os.environ.get("DATASHIELD_KAFKA_BOOTSTRAP", "localhost:29092")
@@ -87,6 +88,16 @@ SERVICES = {
     "gateway":   (8090, "/health"),
     "catalog":   (8091, "/catalog"),
     "airflow":   (AIRFLOW_HOST_PORT, "/health"),
+}
+SERVICE_HOSTPORTS = {
+    8092: os.environ.get("DATASHIELD_SIDECAR_HOSTPORT"),
+    8093: os.environ.get("DATASHIELD_ISOFOREST_HOSTPORT"),
+    8010: os.environ.get("DATASHIELD_DRIFT_HOSTPORT"),
+    8020: os.environ.get("DATASHIELD_BREAKER_HOSTPORT"),
+    8030: os.environ.get("DATASHIELD_RCA_HOSTPORT"),
+    8040: os.environ.get("DATASHIELD_SCHEMA_HOSTPORT"),
+    8090: os.environ.get("DATASHIELD_GATEWAY_HOSTPORT"),
+    8091: os.environ.get("DATASHIELD_CATALOG_HOSTPORT"),
 }
 # Richer, read-only detail endpoints shown on the cards (all GET, none mutate state).
 EXTRA = {
@@ -241,7 +252,8 @@ async def broadcast(event: dict) -> None:
 
 # --------------------------------------------------------------------------- service polling
 def _get(port: int, path: str, timeout: float = 3.0) -> dict:
-    url = f"http://{SERVICES_HOST}:{port}{path}"
+    host = SERVICE_HOSTPORTS.get(port) or f"{SERVICES_HOST}:{port}"
+    url = f"http://{host}{path}"
     t0 = time.monotonic()
     try:
         with urllib.request.urlopen(url, timeout=timeout) as r:
@@ -273,6 +285,11 @@ def poll_all() -> dict:
         "services": {k: v for k, v in results.items() if not k.startswith("x:")},
         "extra": {k[2:]: v for k, v in results.items() if k.startswith("x:")},
     }
+
+
+@app.get("/", include_in_schema=False)
+def dashboard():
+    return FileResponse("/app/dashboard.html", media_type="text/html")
 
 
 @app.get("/services")

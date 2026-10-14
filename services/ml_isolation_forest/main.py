@@ -45,6 +45,7 @@ import joblib
 import psycopg2
 from fastapi import FastAPI
 from kafka import KafkaConsumer, KafkaProducer
+from kafka_config import kafka_client_config
 from sklearn.ensemble import IsolationForest
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -157,6 +158,7 @@ def get_producer() -> KafkaProducer:
         if _producer is None:
             _producer = KafkaProducer(
                 bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+                **kafka_client_config(),
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
                 retries=5,
             )
@@ -323,6 +325,7 @@ def consume_loop() -> None:
     consumer = KafkaConsumer(
         SOURCE_TOPIC,
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+        **kafka_client_config(),
         value_deserializer=lambda v: v,
         auto_offset_reset="earliest",
         group_id="ml-isolation-forest",

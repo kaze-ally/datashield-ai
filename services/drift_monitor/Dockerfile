@@ -2,12 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY services/drift_monitor/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY drift_detector/ ./drift_detector/
-COPY config/ ./config/
-COPY main.py .
+COPY services/drift_monitor/drift_detector/ ./drift_detector/
+COPY services/drift_monitor/config/ ./config/
+COPY services/drift_monitor/main.py ./main.py
+COPY shared/kafka_config.py ./kafka_config.py
 
 EXPOSE 8000
 
