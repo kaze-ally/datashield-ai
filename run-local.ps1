@@ -26,6 +26,14 @@ try {
         throw "docker compose failed with exit code $LASTEXITCODE"
     }
 
+    # docker-entrypoint-initdb.d runs only on an empty Postgres volume. Apply
+    # the idempotent order-attribute migration on every launch so upgrades to
+    # an existing local volume get the same columns as a fresh install.
+    docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U samar -d datashield -f /docker-entrypoint-initdb.d/007_order_attributes.sql
+    if ($LASTEXITCODE -ne 0) {
+        throw "Postgres order-attribute migration failed with exit code $LASTEXITCODE"
+    }
+
     $bridgeReady = $false
     $bridgeAvailable = $false
     try {
@@ -75,7 +83,7 @@ try {
         throw "Dashboard bridge did not connect to Kafka. Check .runtime\bridge.stderr.log and docker compose logs."
     }
 
-    Write-Host "DataShield is running. Kafka bridge is connected."
+    Write-Host "E-commerce real-time sales pipeline guard is running. Kafka bridge is connected."
     $emdash = [char]0x2014
     $observatoryPage = Join-Path $repo "frontend\DataShield AI $emdash Pipeline Observatory.html"
     Write-Host "Open: $observatoryPage"

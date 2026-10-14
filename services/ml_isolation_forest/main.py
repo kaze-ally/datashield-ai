@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import threading
 import time
@@ -61,7 +62,7 @@ MIN_BOOTSTRAP_SAMPLES = int(os.environ.get("MIN_BOOTSTRAP_SAMPLES", "50"))
 RETRAIN_WINDOW_SIZE = int(os.environ.get("RETRAIN_WINDOW_SIZE", "2000"))
 RELOAD_POLL_SECONDS = int(os.environ.get("RELOAD_POLL_SECONDS", "30"))
 
-FEATURE_NAMES = ["order_total", "hour_of_day"]
+FEATURE_NAMES = ["order_total", "hour_of_day", "item_count", "unit_price", "discount_pct", "shipping_cost"]
 _consumer_thread: Optional[threading.Thread] = None
 
 app = FastAPI(title="DataShield Isolation Forest Detector")
@@ -146,7 +147,15 @@ def extract_features(record: dict[str, Any]) -> Optional[list[float]]:
         except ValueError:
             pass
 
-    return [order_total, hour]
+    def numeric(name: str, default: float = 0.0) -> float:
+        try:
+            value = float(record.get(name, default))
+            return value if math.isfinite(value) else default
+        except (TypeError, ValueError):
+            return default
+
+    return [order_total, hour, numeric("item_count"), numeric("unit_price"),
+            numeric("discount_pct"), numeric("shipping_cost")]
 
 
 # --------------------------------------------------------------------------
@@ -236,7 +245,8 @@ def retrain_from_postgres() -> dict[str, Any]:
         else:
             cur.execute(
                 """
-                SELECT order_total, ingested_at
+                SELECT order_total, ingested_at, item_count, unit_price,
+                       discount_pct, shipping_cost
                 FROM validated_orders
                 WHERE order_total IS NOT NULL
                 ORDER BY ingested_at DESC
@@ -247,10 +257,12 @@ def retrain_from_postgres() -> dict[str, Any]:
             order_rows = cur.fetchall()
             window = [
                 features
-                for order_total, ingested_at in order_rows
+                for order_total, ingested_at, item_count, unit_price, discount_pct, shipping_cost in order_rows
                 if (
                     features := extract_features(
-                        {"order_total": order_total, "created_at": ingested_at}
+                        {"order_total": order_total, "created_at": ingested_at,
+                         "item_count": item_count, "unit_price": unit_price,
+                         "discount_pct": discount_pct, "shipping_cost": shipping_cost}
                     )
                 )
                 is not None

@@ -87,6 +87,16 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "datashield" <<-SQL
         payment_method     TEXT,
         shipping_country   TEXT,
         product_category   TEXT,
+        unit_price         DOUBLE PRECISION,
+        currency           TEXT,
+        customer_segment   TEXT,
+        region             TEXT,
+        shipping_method    TEXT,
+        device_type        TEXT,
+        order_channel      TEXT,
+        is_first_purchase  BOOLEAN,
+        loyalty_tier       TEXT,
+        warehouse_id       TEXT,
         ingested_at        TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 

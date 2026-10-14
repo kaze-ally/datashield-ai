@@ -9,15 +9,8 @@ testing rather than just correctness testing.
 New dimensions beyond the original order_id/order_total/payment_method:
 customer_id, customer_segment, region, product_category, shipping_country,
 item_count, unit_price, discount_pct, shipping_method, shipping_cost,
-currency, device_type, order_channel, session_id, is_first_purchase,
-loyalty_tier, warehouse_id, order_timestamp.
-
-Because sidecar_validator's strict_extra_fields defaults to false (per
-README_week5_schema_healer.md's Addendum 2), these extra fields won't by
-themselves break orders_v1 validation — they'll just ride along as
-unrecognized-but-tolerated fields until you decide which ones to add to
-the contract and to validated_orders' schema (see the ALTER TABLE note at
-the bottom of this file).
+currency, device_type, order_channel, is_first_purchase, loyalty_tier,
+warehouse_id, order_timestamp.
 
 Usage:
     pip install kafka-python
@@ -74,7 +67,7 @@ def make_record(drift_shift: float = 0.0) -> dict:
     distributions upward to simulate real, gradual data drift rather than
     a hard-cut regime change. At zero shift, monitored fields match the
     stable reference distribution produced by scripts/seed_test_orders.py."""
-    item_count = _sample_poisson(3)
+    item_count = max(1, _sample_poisson(3))
     order_total = round(max(1.0, random.gauss(50 + drift_shift * 90, 15)), 2)
     unit_price = round(order_total / max(item_count, 1), 2)
     discount_pct = round(min(0.5, random.uniform(0, 0.1) + drift_shift * 0.1), 3)
@@ -97,7 +90,6 @@ def make_record(drift_shift: float = 0.0) -> dict:
         "currency": random.choice(CURRENCIES),
         "device_type": random.choice(DEVICES),
         "order_channel": random.choice(CHANNELS),
-        "session_id": str(uuid.uuid4()),
         "is_first_purchase": random.random() < 0.18,
         "loyalty_tier": random.choice(LOYALTY_TIERS),
         "warehouse_id": random.choice(WAREHOUSES),
@@ -190,24 +182,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-# ---------------------------------------------------------------------------
-# Optional: to actually persist the new dimensions (rather than have them
-# ride along as tolerated-but-unused extra fields), extend validated_orders
-# and orders_v1's contract yourself, e.g.:
-#
-#   ALTER TABLE validated_orders
-#     ADD COLUMN IF NOT EXISTS customer_segment TEXT,
-#     ADD COLUMN IF NOT EXISTS region TEXT,
-#     ADD COLUMN IF NOT EXISTS product_category TEXT,
-#     ADD COLUMN IF NOT EXISTS item_count INTEGER,
-#     ADD COLUMN IF NOT EXISTS unit_price NUMERIC,
-#     ADD COLUMN IF NOT EXISTS discount_pct NUMERIC,
-#     ADD COLUMN IF NOT EXISTS device_type TEXT,
-#     ADD COLUMN IF NOT EXISTS order_channel TEXT;
-#
-# Then add the ones you want drift-checked to drift_detection_config.yaml's
-# `columns:` list (region/product_category/device_type as categorical
-# checks alongside order_total; unit_price/discount_pct as numerical PSI
-# checks) — this is what actually turns "more dimensions" into "more
-# drift-detection surface," not just wider records.
-# ---------------------------------------------------------------------------

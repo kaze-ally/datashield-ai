@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>DataShield AI — Pipeline Observatory</title>
+<title>E-commerce real-time sales pipeline guard</title>
 <style>
 :root{
   --bg:#0a0e16; --panel:#111827; --panel2:#151f33; --border:#25314a;
@@ -50,10 +50,12 @@ p.sub{color:var(--muted);margin:0 0 26px;max-width:640px;font-size:.95rem}
 button.toggle{margin-top:4px;background:transparent;border:1px solid var(--border);color:var(--text);
   padding:7px 11px;border-radius:8px;font-size:.78rem;cursor:pointer;text-align:left;font-family:var(--sans)}
 button.toggle:hover{border-color:var(--cyan);color:var(--cyan)}
-.output{display:none;background:#060a10;border:1px solid var(--border);border-radius:9px;padding:11px 13px;
-  overflow-x:auto}
+.output{display:none;background:linear-gradient(145deg,#080e18,#060a10);border:1px solid #2b3b55;border-radius:10px;padding:12px 14px;
+  overflow:auto;max-height:320px;box-shadow:inset 3px 0 0 var(--cyan)}
 .output.show{display:block}
-.output pre{margin:0;font-family:var(--mono);font-size:.74rem;color:#b8f5d0;white-space:pre;line-height:1.55}
+.output pre{margin:0;font-family:var(--mono);font-size:.72rem;color:#c5f4db;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65}
+.output::-webkit-scrollbar{width:8px;height:8px}.output::-webkit-scrollbar-thumb{background:#33445e;border-radius:99px}
+.output:before{content:'LIVE OUTPUT';display:block;color:var(--cyan);font:600 .61rem var(--sans);letter-spacing:.12em;margin-bottom:9px}
 .output .note{color:var(--amber);font-size:.72rem;margin-top:8px;display:block;font-family:var(--sans)}
 .status-line{font-size:.72rem;color:var(--muted);font-family:var(--mono);margin-top:2px}
 footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);
@@ -89,7 +91,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--border);color
 <body>
 
 <header class="top">
-  <div class="brand">🛡️ DataShield AI
+  <div class="brand">🛡️ E-commerce real-time sales pipeline guard
     <small>Pipeline Observatory</small>
   </div>
   <div class="pill"><span class="dot"></span>Live status not checked</div>
@@ -153,8 +155,25 @@ producer: order-events-simulator
 sample record:
 {
   "order_id": "test-order-001",
-  "order_amt": "89.99",
-  "payment_method": "credit_card"
+  "order_total": 89.99,
+  "payment_method": "card",
+  "currency": "USD",
+  "customer_id": "cust-1024",
+  "customer_segment": "returning",
+  "region": "NA",
+  "product_category": "electronics",
+  "item_count": 2,
+  "unit_price": 44.99,
+  "discount_pct": 0.05,
+  "shipping_method": "express",
+  "shipping_cost": 7.5,
+  "shipping_country": "US",
+  "device_type": "mobile",
+  "order_channel": "app",
+  "is_first_purchase": false,
+  "loyalty_tier": "gold",
+  "warehouse_id": "WH-EAST-1",
+  "order_timestamp": "2026-10-10T10:00:00+00:00"
 }`,
     status:'status not checked'
   },
@@ -262,6 +281,7 @@ flowOrder.forEach((id,i)=>{
 });
 
 const cardState = {};
+let latestOrderSnapshot = null;
 const grid = document.getElementById('grid');
 services.forEach(s=>{
   const card = document.createElement('div');
@@ -308,6 +328,7 @@ function renderOutput(id){
   const parts = [];
   if(st.api) parts.push(st.api);
   if(st.event) parts.push(st.event);
+  if(latestOrderSnapshot) parts.push(latestOrderSnapshot);
   out.textContent = parts.length ? parts.join('\n\n') : st.initial;
 }
 
@@ -557,6 +578,17 @@ function addFeedItem(ev){
   if(seenEvents.size > 5000){ seenEvents.delete(seenEvents.values().next().value); }
   topicCounts[ev.topic] = (topicCounts[ev.topic]||0)+1; renderCounts();
 
+  // Keep the full order context visible on every feature card, alongside
+  // each card's own API result or Kafka event. Prefer validated-data when it
+  // arrives because the sidecar has already applied contract privacy rules.
+  if((ev.topic==='raw-data'||ev.topic==='validated-data') && ev.payload && typeof ev.payload==='object'){
+    const record = ev.topic==='validated-data' && ev.payload.record
+      ? ev.payload.record : ev.payload;
+    latestOrderSnapshot = 'LATEST ORDER ATTRIBUTES · '+ev.topic+' · '+new Date(ev.received_at).toLocaleTimeString()+
+      '\n'+JSON.stringify(record, null, 2);
+    Object.keys(cardState).forEach(renderOutput);
+  }
+
   const feed = document.getElementById('eventFeed');
   if(feed.querySelector('.step .sh[data-placeholder]')) feed.innerHTML = '';
   const c = stepColor[ev.card] || '#22d3ee';
@@ -573,7 +605,7 @@ function addFeedItem(ev){
 
   const st = cardState[ev.card];
   if(st){
-    st.event = 'LATEST KAFKA EVENT  '+ev.topic+(ev.replayed?' (history)':'')+' @ '+t+'\n'+JSON.stringify(ev.payload, null, 2).slice(0,1800);
+    st.event = 'FEATURE EVENT · '+ev.topic+(ev.replayed?' · history':'')+' · '+t+'\n'+JSON.stringify(ev.payload, null, 2).slice(0,1800);
     st.eventStatus = (ev.replayed ? 'history: ' : 'event: ')+ev.topic+' @ '+t;
     renderStatus(ev.card); renderOutput(ev.card);
     if(!ev.replayed){

@@ -27,10 +27,18 @@ columns:
     - item_count
     - shipping_cost
     - discount_pct
+    - unit_price
   categorical:
     - payment_method
     - shipping_country
     - product_category
+    - currency
+    - customer_segment
+    - region
+    - shipping_method
+    - device_type
+    - order_channel
+    - loyalty_tier
   # Keep this list in sync with contracts/examples/orders_v1.yaml's schema —
   # the drift monitor should watch the same fields the sidecar validates.
 

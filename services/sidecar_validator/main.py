@@ -49,8 +49,8 @@ import psycopg2
 import yaml
 from fastapi import FastAPI
 from kafka import KafkaConsumer, KafkaProducer
-from kafka_config import kafka_client_config
 from kafka.structs import OffsetAndMetadata, TopicPartition
+from kafka_config import kafka_client_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("sidecar_validator")
@@ -250,9 +250,11 @@ def persist_validated_order(record: dict[str, Any]) -> None:
             """
             INSERT INTO validated_orders (
                 order_id, order_total, item_count, shipping_cost, discount_pct,
-                payment_method, shipping_country, product_category
+                payment_method, shipping_country, product_category, unit_price,
+                currency, customer_segment, region, shipping_method, device_type,
+                order_channel, is_first_purchase, loyalty_tier, warehouse_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (order_id) DO NOTHING
             """,
             (
@@ -264,6 +266,16 @@ def persist_validated_order(record: dict[str, Any]) -> None:
                 record.get("payment_method"),
                 record.get("shipping_country"),
                 record.get("product_category"),
+                record.get("unit_price"),
+                record.get("currency"),
+                record.get("customer_segment"),
+                record.get("region"),
+                record.get("shipping_method"),
+                record.get("device_type"),
+                record.get("order_channel"),
+                record.get("is_first_purchase"),
+                record.get("loyalty_tier"),
+                record.get("warehouse_id"),
             ),
         )
 

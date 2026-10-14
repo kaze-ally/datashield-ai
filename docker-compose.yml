@@ -1,5 +1,5 @@
 # =============================================================================
-# DataShield AI — Local Production-Grade Environment (100% free/open-source)
+# E-commerce real-time sales pipeline guard — Local Production-Grade Environment (100% free/open-source)
 # =============================================================================
 # Core infra : Zookeeper, Kafka, Postgres (pgvector), Airflow (LocalExecutor)
 # Dev tooling: Kafka UI

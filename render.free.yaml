@@ -1,0 +1,13 @@
+# Free-tier DataShield AI showcase (dashboard + synthetic live feed).
+# Use via Render -> New -> Blueprint -> set "Blueprint file path" to render.free.yaml
+services:
+  - type: web
+    name: datashield-ai-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: frontend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DATASHIELD_DEMO_MODE
+        value: "1"

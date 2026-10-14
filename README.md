@@ -1,4 +1,4 @@
-# DataShield AI
+# E-commerce real-time sales pipeline guard
 
 Automated, real-time data observability, privacy enforcement, and
 autonomous data-healing platform for e-commerce pipelines. Full literature
@@ -12,8 +12,8 @@ From PowerShell, start the complete local stack and the host Kafka bridge with:
 .\run-local.ps1
 ```
 
-Use `.un-local.ps1 -Build` after changing service code or Dockerfiles. Open
-`frontend\DataShield AI — Pipeline Observatory.html` locally; it connects to
+Use `.\run-local.ps1 -Build` after changing service code or Dockerfiles. Open
+`frontend/DataShield AI — Pipeline Observatory.html` locally; it connects to
 the bridge automatically. The bridge serves live service status and Kafka
 events at `http://localhost:8099`.
 

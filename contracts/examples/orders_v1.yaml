@@ -23,3 +23,83 @@ fields:
   - name: currency
     type: string
     required: false
+    allowed_values: [USD, EUR, GBP, INR]
+  - name: customer_id
+    type: string
+    required: false
+    pii: true
+    masking_strategy: hash
+  - name: customer_segment
+    type: string
+    required: false
+    allowed_values: [new, returning, vip]
+  - name: region
+    type: string
+    required: false
+    allowed_values: [NA, EU, APAC, LATAM]
+  - name: product_category
+    type: string
+    required: false
+    allowed_values: [electronics, apparel, home]
+  - name: item_count
+    type: int
+    required: false
+  - name: unit_price
+    type: float
+    required: false
+  - name: discount_pct
+    type: float
+    required: false
+  - name: shipping_method
+    type: string
+    required: false
+    allowed_values: [standard, express, overnight]
+  - name: shipping_cost
+    type: float
+    required: false
+  - name: shipping_country
+    type: string
+    required: false
+    allowed_values: [IN, US, UK]
+  - name: device_type
+    type: string
+    required: false
+    allowed_values: [mobile, desktop, tablet]
+  - name: order_channel
+    type: string
+    required: false
+    allowed_values: [web, app, marketplace]
+  - name: is_first_purchase
+    type: boolean
+    required: false
+  - name: loyalty_tier
+    type: string
+    required: false
+    allowed_values: [bronze, silver, gold, platinum]
+  - name: warehouse_id
+    type: string
+    required: false
+  - name: order_timestamp
+    type: timestamp
+    required: false
+quality_rules:
+  - rule: range_check
+    field: order_total
+    min: 0
+    max: 100000
+  - rule: range_check
+    field: item_count
+    min: 1
+    max: 500
+  - rule: range_check
+    field: unit_price
+    min: 0
+    max: 100000
+  - rule: range_check
+    field: discount_pct
+    min: 0
+    max: 1
+  - rule: range_check
+    field: shipping_cost
+    min: 0
+    max: 10000

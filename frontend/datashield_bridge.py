@@ -1,5 +1,5 @@
 """
-DataShield AI - Dashboard Event Bridge (v2)
+E-commerce real-time sales pipeline guard - Dashboard Event Bridge (v2)
 -------------------------------------------
 Runs on the HOST (not in Docker) and gives the Pipeline Observatory page three things:
 
@@ -26,6 +26,7 @@ Env vars (all optional):
 import asyncio
 import json
 import os
+import random
 import threading
 import time
 import urllib.error
@@ -47,7 +48,11 @@ REPLAY_PER_TOPIC = int(os.environ.get("BRIDGE_REPLAY_PER_TOPIC", 8))
 SERVICES_HOST = os.environ.get("BRIDGE_SERVICES_HOST", "localhost")
 MONITOR_NAME = os.environ.get("BRIDGE_MONITOR_NAME", "orders_pipeline_drift")
 AIRFLOW_HOST_PORT = int(os.environ.get("BRIDGE_AIRFLOW_PORT", "18080"))
+DASHBOARD_PATH = os.environ.get("DASHBOARD_HTML", "/app/dashboard.html")
 BACKLOG_SIZE = 300
+# Free-tier / showcase mode: no Kafka or backend services needed. The bridge emits
+# synthetic pipeline events and reports synthetic service status.
+DEMO_MODE = os.environ.get("DATASHIELD_DEMO_MODE", "0").lower() in ("1", "true", "yes")
 
 KAFKA_SECURITY_PROTOCOL = os.environ.get("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
 KAFKA_SASL_MECHANISM = os.environ.get("KAFKA_SASL_MECHANISM", "PLAIN")
@@ -128,11 +133,12 @@ _http_pool = ThreadPoolExecutor(max_workers=12, thread_name_prefix="svc-poll")
 async def lifespan(app: FastAPI):
     global main_loop
     main_loop = asyncio.get_running_loop()
-    threading.Thread(target=consume_forever, daemon=True, name="kafka-consumer").start()
+    target = demo_forever if DEMO_MODE else consume_forever
+    threading.Thread(target=target, daemon=True, name="demo-feed" if DEMO_MODE else "kafka-consumer").start()
     yield
 
 
-app = FastAPI(title="DataShield Dashboard Bridge", lifespan=lifespan)
+app = FastAPI(title="E-commerce real-time sales pipeline guard Dashboard Bridge", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 # ^ dev-only bridge for a local dashboard; tighten if you ever expose this beyond localhost.
 
@@ -239,6 +245,83 @@ def consume_forever() -> None:
             time.sleep(5)
 
 
+# --------------------------------------------------------------------------- demo mode
+def _demo_order(i: int, drift: float = 0.0) -> dict:
+    total = round(max(1.0, random.gauss(50 + drift * 90, 15)), 2)
+    return {
+        "order_id": f"ord-{i:07d}", "order_total": total, "item_count": max(1, int(random.gauss(3, 1))),
+        "payment_method": random.choice(["card", "paypal", "upi", "cod"]),
+        "region": random.choice(["NA", "EU", "APAC", "LATAM"]),
+        "customer_id": f"cust-{random.randint(1, 50000)}",
+        "order_timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def demo_forever() -> None:
+    """Synthetic event feed that mimics the real topic flow, including anomalies,
+    schema mismatches (healed or sent to the DLQ), drift and circuit-breaker events."""
+    stats["kafka_connected"], stats["last_error"] = True, None
+    i, drift, seq = 0, 0.0, Counter()
+
+    def emit(topic: str, payload: dict) -> None:
+        seq[topic] += 1
+        _publish(_make_event(topic, 0, seq[topic], json.dumps(payload), None, replayed=False))
+
+    while True:
+        i += 1
+        drift = min(1.0, drift + 0.01) if (i // 120) % 2 == 0 else max(0.0, drift - 0.02)
+        rec = _demo_order(i, drift)
+        emit("raw-data", rec)
+        r = random.random()
+        if r < 0.06:                      # statistical outlier -> Isolation Forest
+            rec["order_total"] = round(random.uniform(5000, 25000), 2)
+            emit("anomaly-alerts", {"order_id": rec["order_id"], "score": round(random.uniform(-0.8, -0.55), 3),
+                                    "reason": "isolation_forest_outlier", "order_total": rec["order_total"]})
+        elif r < 0.12:                    # schema mismatch -> healer or DLQ
+            bad = dict(rec); bad["order_amt"] = str(bad.pop("order_total"))
+            emit("schema-evolution-requests", {"order_id": bad["order_id"], "mismatch": {"missing": ["order_total"], "unexpected": ["order_amt"]}})
+            if random.random() < 0.75:
+                bad["order_total"] = float(bad.pop("order_amt")); bad["_schema_healer"] = {"mapping": "order_amt->order_total"}
+                emit("validated-data", bad)
+            else:
+                emit("dead-letter-queue", {"order_id": bad["order_id"], "reason": "healing_failed"})
+                emit("remediation-requests", {"monitor": "orders_pipeline_drift", "attempt": random.randint(1, 3)})
+        else:
+            emit("validated-data", rec)
+        if i % 40 == 0:
+            emit("drift-events", {"monitor": MONITOR_NAME, "psi": round(0.05 + drift * 0.4, 3), "drift_detected": drift > 0.5})
+        if i % 90 == 0:
+            emit("openlineage-events", {"job": "orders_validation", "state": "COMPLETE"})
+        time.sleep(random.uniform(0.4, 1.2))
+
+
+def _demo_services() -> dict:
+    def ok(path, data):
+        return {"ok": True, "status": 200, "latency_ms": random.randint(4, 40), "path": path, "data": data}
+    svc = {
+        "sidecar": ok("/contracts", ["orders_v1"]),
+        "isoforest": ok("/health", {"status": "ok", "model_loaded": True, "bootstrap_buffer_size": 500}),
+        "drift": ok("/health", {"status": "ok", "monitor_name": MONITOR_NAME}),
+        "breaker": ok("/health", {"status": "ok"}),
+        "rca": ok("/health", {"status": "ok"}),
+        "schema": ok("/health", {"status": "ok"}),
+        "gateway": ok("/health", {"status": "ok"}),
+        "catalog": ok("/catalog", {"orders_v1": {}}),
+        "airflow": ok("/health", {"status": "ok"}),
+    }
+    extra = {
+        "breaker_state": ok(f"/state/{MONITOR_NAME}", {"state": "CLOSED", "trip_count": 0, "consecutive_failures": 0}),
+        "rca_latest": ok(f"/reports/{MONITOR_NAME}?limit=1", [{"severity": "medium", "root_cause_category": "upstream_schema_change"}]),
+        "isoforest_model": ok("/model-info", {"n_samples": 500}),
+    }
+    return {
+        "checked_at": datetime.now(timezone.utc).isoformat(), "demo": True,
+        "kafka": {"connected": True, "bootstrap": "demo-mode (synthetic)", "last_error": None,
+                  "last_event_at": stats["last_event_at"], "topic_counts": dict(stats["topic_counts"]), "replayed_on_start": 0},
+        "services": svc, "extra": extra,
+    }
+
+
 async def broadcast(event: dict) -> None:
     dead = []
     for ws in list(clients):
@@ -289,11 +372,13 @@ def poll_all() -> dict:
 
 @app.get("/", include_in_schema=False)
 def dashboard():
-    return FileResponse("/app/dashboard.html", media_type="text/html")
+    return FileResponse(DASHBOARD_PATH, media_type="text/html")
 
 
 @app.get("/services")
 async def services():
+    if DEMO_MODE:
+        return _demo_services()
     return await asyncio.get_running_loop().run_in_executor(None, poll_all)
 
 
@@ -301,7 +386,7 @@ async def services():
 @app.get("/health")
 def health():
     return {
-        "status": "ok", "kafka_bootstrap": KAFKA_BOOTSTRAP, "kafka_connected": stats["kafka_connected"],
+        "status": "ok", "demo_mode": DEMO_MODE, "kafka_bootstrap": KAFKA_BOOTSTRAP, "kafka_connected": stats["kafka_connected"],
         "last_error": stats["last_error"], "last_event_at": stats["last_event_at"],
         "topics": TOPICS, "connected_clients": len(clients), "backlog_size": len(backlog),
         "replayed_on_start": stats["replayed"], "topic_counts": dict(stats["topic_counts"]),
@@ -331,4 +416,4 @@ async def ws_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=BRIDGE_PORT)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", BRIDGE_PORT)))
